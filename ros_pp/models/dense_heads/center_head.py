@@ -104,6 +104,15 @@ class CenterHead(nn.Module):
         self.nms_iou_thresh = model_cfg.POST_PROCESSING.NMS_IOU_THRESH
         self.nms_pre_max_size = model_cfg.POST_PROCESSING.NMS_PRE_MAXSIZE 
         self.nms_post_max_size = model_cfg.POST_PROCESSING.NMS_POST_MAXSIZE
+
+        self.heads_cls_idx = [
+            torch.tensor([0]).long().cuda(),
+            torch.tensor([1, 2]).long().cuda(),
+            torch.tensor([3, 4]).long().cuda(),
+            torch.tensor([5]).long().cuda(),
+            torch.tensor([6, 7]).long().cuda(),
+            torch.tensor([8, 9]).long().cuda(),
+        ]
     
     def sigmoid(self, x: torch.Tensor):
         y = torch.clamp(x.sigmoid(), min=1e-4, max=1 - 1e-4)
@@ -133,6 +142,9 @@ class CenterHead(nn.Module):
         # get center coord in 3D
         xs = xs * self.feature_map_stride * self.voxel_size[0] + self.point_cloud_range[0]
         ys = ys * self.feature_map_stride * self.voxel_size[1] + self.point_cloud_range[1]
+
+        # get size in 3D
+        dim = torch.exp(dim)
 
         final_box_preds = torch.cat(([xs, ys, center_z, dim, angle]), dim=-1)  # (batch_size, K, 7)
         final_scores = scores.view(batch_size, K)
@@ -174,11 +186,7 @@ class CenterHead(nn.Module):
             List[pred_per_sample]
                 pred_persample = (pred_boxes, pred_scores, pred_labels)
         """
-        final_output = [[  # prediction of multi-heads for a sample in the batch
-            [],  # boxes
-            [],  # scores
-            []  # labels
-        ] for batch_idx in range(self.batch_size)]
+        batch_boxes = []   # (N, 10) - x, y, z, dx, dy, dz, yaw || score, labels || batch_idx
 
         for head_idx in range(self.num_heads):
             batch_hm = self.sigmoid(heads_hm[head_idx])
@@ -196,18 +204,24 @@ class CenterHead(nn.Module):
                                                          self.nms_pre_max_size, 
                                                          self.nms_post_max_size)
                 
+                pred_boxes = torch.cat([boxes,  # (N, 7) - x, y, z, dx, dy, dz, yaw 
+                                        scores.unsqueeze(1),  # (N, 1) 
+                                        self.heads_cls_idx[head_idx][labels.long()].unsqueeze(1),  # (N, 1) - class index
+                                        boxes.new_zeros(boxes.shape[0], 1) + batch_idx],  # (N, 1) - batch_idx 
+                                        dim=1)
+
                 # store this_head 's prediction to final output
-                final_output[batch_idx][0].append(boxes)
-                final_output[batch_idx][1].append(scores)
-                final_output[batch_idx][2].append(labels)
+                batch_boxes.append(pred_boxes)
         
-        for batch_idx in range(self.batch_size):
-            for ii in range(3):
-                final_output[batch_idx][ii] = torch.cat(final_output[batch_idx][ii])
+        batch_boxes = torch.cat(batch_boxes)
         
-        return final_output
+        return batch_boxes
     
     def forward(self, spatial_features_2d: torch.Tensor):
+        """
+        Returns:
+            batch_boxes: (N, 10) - x, y, z, dx, dy, dz, yaw || score, labels || batch_idx
+        """
         x = self.shared_conv(spatial_features_2d)
 
         heads_hm, heads_center, heads_center_z, heads_dim, heads_rot = list(), list(), list(), list(), list()
@@ -221,6 +235,6 @@ class CenterHead(nn.Module):
             heads_dim.append(dim)
             heads_rot.append(rot)
             
-        final_out = self.generate_predicted_boxes(heads_hm, heads_center, heads_center_z, heads_dim, heads_rot)
+        batch_boxes = self.generate_predicted_boxes(heads_hm, heads_center, heads_center_z, heads_dim, heads_rot)  # (N, 10)
 
-        return final_out
+        return batch_boxes
