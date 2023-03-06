@@ -6,9 +6,7 @@ from typing import Tuple
 class PointPillarScatter(nn.Module):
     def __init__(self, model_cfg, grid_size: Tuple[int, int, int], **kwargs):
         super().__init__()
-
-        self.model_cfg = model_cfg
-        self.num_bev_features = self.model_cfg.NUM_BEV_FEATURES
+        self.num_bev_features = model_cfg.NUM_BEV_FEATURES
         self.nx, self.ny, self.nz = grid_size
         self.batch_size = model_cfg.get('BATCH_SIZE', 1)
         assert self.nz == 1

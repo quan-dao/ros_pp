@@ -41,20 +41,20 @@ class PFNLayerV2(nn.Module):
 
 class DynamicPillarVFE(nn.Module):
     def __init__(self, model_cfg, num_point_features, voxel_size, grid_size, point_cloud_range, **kwargs):
-        super().__init__(model_cfg=model_cfg)
+        super().__init__()
         # enable overwriting num_point_features from config file
-        if self.model_cfg.get('NUM_RAW_POINT_FEATURES', None) is not None:
-            num_point_features = self.model_cfg.NUM_RAW_POINT_FEATURES
+        if model_cfg.get('NUM_RAW_POINT_FEATURES', None) is not None:
+            num_point_features = model_cfg.NUM_RAW_POINT_FEATURES
         # ---
         self.num_raw_point_features = num_point_features
-        self.use_norm = self.model_cfg.USE_NORM
-        self.with_distance = self.model_cfg.WITH_DISTANCE
-        self.use_absolute_xyz = self.model_cfg.USE_ABSLOTE_XYZ
+        self.use_norm = model_cfg.USE_NORM
+        self.with_distance = model_cfg.WITH_DISTANCE
+        self.use_absolute_xyz = model_cfg.USE_ABSOLUTE_XYZ
         num_point_features += 6 if self.use_absolute_xyz else 3
         if self.with_distance:
             num_point_features += 1
 
-        self.num_filters = self.model_cfg.NUM_FILTERS
+        self.num_filters = model_cfg.NUM_FILTERS
         assert len(self.num_filters) > 0
         num_filters = [num_point_features] + list(self.num_filters)
 
