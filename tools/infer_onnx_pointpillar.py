@@ -14,32 +14,42 @@ def main():
     part0.eval()
     part0.cuda()
 
-    onnx_part1 = onnx.load("pointpillar_onnx/pointpillar_part1.onnx")
+    onnx_file = "pointpillar_onnx/pointpillar_part1_no_nms.onnx"
+
+    onnx_part1 = onnx.load(onnx_file)
     onnx.checker.check_model(onnx_part1)
     print('check complete')
-    ort_session = ort.InferenceSession("pointpillar_onnx/pointpillar_part1.onnx")
+    ort_session = ort.InferenceSession(onnx_file, providers=["CUDAExecutionProvider"])
 
     points = make_dummy_input()
+    points_ = remove_points_outside_range(points, np.array(data_cfg.POINT_CLOUD_RANGE))
 
-    time_tic = time.time()
+    for i in range(10):
+        time_tic = time.time()
 
-    points = remove_points_outside_range(points, np.array(data_cfg.POINT_CLOUD_RANGE))
-    points = torch.from_numpy(points).float().cuda()
+        points = torch.from_numpy(np.copy(points_)).float().cuda()
 
-    with torch.no_grad():
-        voxel_coords, features = part0(points)
-    
-    voxel_coords = voxel_coords.cpu().numpy()
-    features = features.cpu().numpy()
-    outputs = ort_session.run(None, {'voxel_coords': voxel_coords, 'features': features})
+        with torch.no_grad():
+            voxel_coords, features = part0(points)
+        time_voxelize = time.time() - time_tic
 
-    print('infer time: ', time.time() - time_tic)
+
+        voxel_coords = voxel_coords.cpu().numpy()
+        features = features.cpu().numpy()
+
+        time_to_gpu = time.time() - time_tic
+
+        outputs = ort_session.run(None, {'voxel_coords': voxel_coords, 'features': features})
+        time_infer = time.time() - time_tic
+
+        print(f"{i} time_voxelize: ", time_voxelize)
+        print(f"{i} time_to_gpu: ", time_to_gpu)
+        print(f'{i} infer time: ', time_infer)
 
     batch_boxes = outputs[0]
     print('batch_boxes: ', batch_boxes.shape)
 
-    np.save('dummy_output.npy', batch_boxes)
-
+    np.save('dummy_output_no_nms.npy', batch_boxes)
 
 
 if __name__ == '__main__':

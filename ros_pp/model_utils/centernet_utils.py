@@ -138,40 +138,15 @@ def nms_axis_aligned(boxes: torch.Tensor, boxes_score: torch.Tensor, boxes_label
     boxes = boxes[sort_ind]  # (N, 7)
     boxes_label = boxes_label[sort_ind]  # (N,)
 
-    boxes = boxes[:nms_pre_max_size]
-    boxes_score = boxes_score[:nms_pre_max_size]
-    boxes_label = boxes_label[:nms_pre_max_size]
+    # boxes = boxes[:nms_pre_max_size]
+    # boxes_score = boxes_score[:nms_pre_max_size]
+    # boxes_label = boxes_label[:nms_pre_max_size]
 
-    # convert boxes to axis-align format
-    boxes_axis_aligned = oriented_boxes_to_axis_aligned(boxes)  # (N, 4) - x_min, y_min, x_max, y_max
+    # # convert boxes to axis-align format
+    # boxes_axis_aligned = oriented_boxes_to_axis_aligned(boxes)  # (N, 4) - x_min, y_min, x_max, y_max
 
-    keep_idx = nms(boxes_axis_aligned, boxes_score, max_overlap)
-    boxes, boxes_score, boxes_label = boxes[keep_idx], boxes_score[keep_idx], boxes_label[keep_idx]
-
-    # # Find the overlap between predicted boxes
-    # overlap = find_jaccard_overlap(boxes_axis_aligned, boxes_axis_aligned)  # (N, N)
-
-    # # A torch.uint8 (byte) tensor to keep track of which predicted boxes to suppress
-    # # 1 implies suppress, 0 implies don't suppress
-    # suppress = torch.zeros(boxes.shape[0], dtype=torch.bool).to(device)  # (N,)
-
-    # # Consider each box in order of decreasing scores
-    # for box_idx in range(boxes.shape[0]):
-    #     # If this box is already marked for suppression
-    #     if suppress[box_idx]:
-    #         continue
-
-    #     # Suppress boxes whose overlaps (with this box) are greater than maximum overlap
-    #     # Find such boxes and update suppress indices
-    #     suppress = torch.logical_or(suppress, overlap[box_idx] > max_overlap)
-    #     # The max operation retains previously suppressed boxes, like an 'OR' operation
-
-    #     # Don't suppress this box, even though it has an overlap of 1 with itself
-    #     suppress[box_idx] = False
-    
-    # # return unsuppressed boxes
-    # keep = (1 - suppress.long()).bool()
-    # boxes, boxes_score, boxes_label = boxes[keep], boxes_score[keep], boxes_label[keep]
+    # keep_idx = nms(boxes_axis_aligned, boxes_score, max_overlap)
+    # boxes, boxes_score, boxes_label = boxes[keep_idx], boxes_score[keep_idx], boxes_label[keep_idx]
 
     boxes = boxes[:nms_post_max_size]
     boxes_score = boxes_score[:nms_post_max_size]

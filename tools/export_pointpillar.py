@@ -170,14 +170,14 @@ if __name__ == '__main__':
     # exporting
     onnx_dir = 'pointpillar_onnx'
     torch.onnx.export(part1, 
-                      (voxel_coords, features), 
-                      f"{onnx_dir}/pointpillar_part1.onnx", 
-                      export_params=True, 
-                      opset_version=11, 
-                      do_constant_folding=True,
-                      input_names=['voxel_coords', 'features'],
-                      output_names=['batch_boxes'],
-                      dynamic_axes={'voxel_coords': {0: 'num_pillars'},
+                    (voxel_coords, features), 
+                    f"{onnx_dir}/pointpillar_part1_no_nms.onnx", 
+                    export_params=True, 
+                    opset_version=11, 
+                    do_constant_folding=True,
+                    input_names=['voxel_coords', 'features'],
+                    output_names=['batch_boxes'],
+                    dynamic_axes={'voxel_coords': {0: 'num_pillars'},
                                     'batch_boxes': {0: 'num_boxes'}}
                     )
 
