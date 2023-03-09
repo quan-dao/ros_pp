@@ -4,6 +4,8 @@ from typing import Tuple
 
 '''
 State: (x, y, z, yaw, l, w, h, dx, dy, dz, dyaw)
+
+track = [state || num_hit, num_miss, id]
 '''
 
 
@@ -71,13 +73,13 @@ def batch_kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, Q:
 
 
     Args:
-        tracks: (N, 11 + 4) - state (11), info (4)
+        tracks: (N, 11 + 3) - state (11), info (3)
         tracks_P: (N, 11, 11) - tracks' covariance matrix
         F: (11, 11) - transition matrix
         Q: (11, 11) - noise of transition matrix
 
     Returns:
-        tracks: (N, 11 + 4) with state changed according to (1)
+        tracks: (N, 11 + 3) with state changed according to (1)
         tracks_P: (N, 11, 11) according to (2)
     """
     tracks[:, :11] = tracks[:, :11] @ F.T
@@ -85,15 +87,17 @@ def batch_kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, Q:
     return tracks, tracks_P
 
 
-def batch_kf_predict_measurement(tracks: np.ndarray, num_observable_states: int = 7) -> np.ndarray:
+def batch_kf_predict_measurement(tracks: np.ndarray, tracks_P: np.ndarray, H: np.ndarray, R: np.ndarray, num_observable_states: int = 7) -> np.ndarray:
     """
     Computed predicted measurement according to linear measurement model
         pred_o = H @ x   (x: state vector)
     """
-    return tracks[:, :num_observable_states]
+    obs = tracks[:, :num_observable_states]
+    S = np.einsum('ij, bjk, kh -> bih', H, tracks_P, H.T) + R
+    return obs, S
 
 
-def batch_kf_update(tracks: np.ndarray, tracks_P: np.ndarray, observations: np.ndarray, H: np.ndarray, S: np.ndarray) -> Tuple[np.ndarray]:
+def batch_kf_update(tracks: np.ndarray, tracks_P: np.ndarray, observations: np.ndarray, H: np.ndarray, R: np.ndarray) -> Tuple[np.ndarray]:
     """
     Update step of a linear KF
         K = P @ H.T @ inv(S)                (1)
@@ -101,18 +105,19 @@ def batch_kf_update(tracks: np.ndarray, tracks_P: np.ndarray, observations: np.n
         P_new = (eye - K @ H) @ P           (3)
 
     Args:
-        tracks: (N, 11 + 4) - state (11), info (4)
+        tracks: (N, 11 + 3) - state (11), info (4)
         tracks_P: (N, 11, 11) - tracks' covariance matrix
-        observations: (N, 11) - tracks' match observation (1-1 mathcing)
-        H: (11, 11 + 4) - measurement matrix
+        observations: (N, 7) - tracks' match observation (1-1 mathcing)
+        H: (11, 11 + 3) - measurement matrix
         S: (15, 15) - noise of measurement matrix
 
     Returns:
-        tracks: (N, 11 + 4) according to (2)
+        tracks: (N, 11 + 3) according to (2)
         tracks_P: (N, 11, 11) according to (3)
     """
+    obs, S = batch_kf_predict_measurement(tracks, tracks_P, H, R)
     K = np.einsum('bij, jk, kh -> bih', tracks_P, H.T, np.linalg.inv(S))  # (N, 11, 7)
-    innov = observations - batch_kf_predict_measurement(tracks)  # (N, 7)
+    innov = observations - obs  # (N, 7)
     tracks[:, :11] = tracks[:, :11] + np.einsum('bih, bh -> bi', K, innov)
     tracks_P = tracks_P - np.einsum('bij, bjk, kh -> bih', tracks_P, K, H)
     return tracks, tracks_P
