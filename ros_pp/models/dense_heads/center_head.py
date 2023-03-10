@@ -191,7 +191,7 @@ class CenterHead(nn.Module):
         for head_idx in range(self.num_heads):
             batch_hm = self.sigmoid(heads_hm[head_idx])  # (B, N_cls, H, W)
             
-            # TODO: find local peak in 3x3 region to replace NMS
+            # find local peak in 3x3 region to replace NMS
             batch_hm_peak = nn.functional.max_pool2d(batch_hm, kernel_size=3, stride=1, padding=1)
             batch_hm_peak_mask = torch.absolute(batch_hm - batch_hm_peak) < 1e-8
             batch_hm = batch_hm * batch_hm_peak_mask.float()

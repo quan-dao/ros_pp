@@ -12,6 +12,7 @@ track = [state || num_hit, num_miss, id]
 observations = (x, y, z, yaw, l, w, h)
 '''
 YAW_INDEX = 3
+CLASS_NAMES = ['car','truck', 'construction_vehicle', 'bus', 'trailer', 'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
 
 
 def put_angle_in_range(angles: np.ndarray) -> np.ndarray:
@@ -51,12 +52,8 @@ def wrapper_kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, 
     return tracks, tracks_P
 
 
-def data_assoc(cost_matrix: np.ndarray) -> Tuple[np.ndarray]:
-    pass  # TODO
-
-
 def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, detections: np.ndarray, 
-                chosen_class_idx: int, detection_yaw_last=True) -> Tuple[np.ndarray, np.ndarray, int]:
+                chosen_class_idx: int, cost_threshold=11.0, detection_yaw_last=True) -> Tuple[np.ndarray, np.ndarray, int]:
     """
     Args:
         tracks: (N, 11 + 3) - state (11), info (3)
@@ -69,9 +66,10 @@ def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, de
     assert detections.shape[1] == 9, f"expect 9 (x, y, z, dx, dy, dz, yaw, score, label), get {detections.shape[1]}"
     F = TRANSITION_MATRIX
     H = MEASUREMENT_MATRIX
-    Q = np.diag(MATRICES_Q['car'])  # TODO
-    P_0 = np.diag(MATRICES_P['car'])  # TODO
-    R = np.diag(MATRICES_R['car'])  # TODO
+    cls_name = CLASS_NAMES[chosen_class_idx]
+    Q = np.diag(MATRICES_Q[cls_name])
+    P_0 = np.diag(MATRICES_P[cls_name])
+    R = np.diag(MATRICES_R[cls_name])
     
     # KF prediction
     tracks, tracks_P = wrapper_kf_predict(tracks, tracks_P, F, Q)
@@ -88,7 +86,7 @@ def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, de
         cost = build_cost_matrix(tracks_obs, tracks_S, dets)
 
         # assoc
-        matches, unmatched_dets_idx, unmatched_tracks_idx = data_assoc(cost)  # TODO
+        matches, unmatched_dets_idx, unmatched_tracks_idx = wrapper_matching(cost, cost_threshold)
         
         # ---
         # matched
@@ -155,3 +153,76 @@ def build_cost_matrix(tracks_obs: np.ndarray, tracks_S: np.ndarray, dets: np.nda
                       diff[:, :, :, np.newaxis])[:, :, 0, 0]
     return cost
 
+
+def greedy_match(distance_matrix: np.ndarray) -> np.ndarray:
+    '''
+    Find the one-to-one matching using greedy allgorithm choosing small distance
+
+    Args:
+        distance_matrix: (num_detections, num_tracks)
+
+    Returns:
+        matched_indices: (num_matches, 2) - (det_idx, track_idx)
+    '''
+    matched_indices = []
+
+    num_detections, num_tracks = distance_matrix.shape
+    distance_1d = distance_matrix.reshape(-1)
+    index_1d = np.argsort(distance_1d)
+    index_2d = np.stack([index_1d // num_tracks, index_1d % num_tracks], axis=1)  # (num_det * num_tracks, 2)
+    detection_id_matches_to_tracking_id = -np.ones(num_detections, dtype=int)
+    tracking_id_matches_to_detection_id = -np.ones(num_tracks, dtype=int)
+    for sort_i in range(index_2d.shape[0]):
+        detection_id = int(index_2d[sort_i][0])
+        tracking_id = int(index_2d[sort_i][1])
+        if tracking_id_matches_to_detection_id[tracking_id] == -1 and detection_id_matches_to_tracking_id[detection_id] == -1:
+            tracking_id_matches_to_detection_id[tracking_id] = detection_id
+            detection_id_matches_to_tracking_id[detection_id] = tracking_id
+            matched_indices.append([detection_id, tracking_id])
+
+    matched_indices = np.array(matched_indices)
+    return matched_indices
+
+
+def wrapper_matching(cost_matrix: np.ndarray, cost_threshold: float, square_cost_threshold: bool = True) -> Tuple[np.ndarray]:
+    """
+    Find matches, unmatched detections, unmatched tracks
+
+    Args:
+        cost_matrix: (num_dets, num_tracks)
+        cost_threshold: to filter out bad match
+
+    Returns:
+        matches: (num_matches, 2) - (det_idx, track_idx)
+        unmatched_dets_idx: (num_unmatched_dets)
+        unmatched_tracks_idx: (num_unmatched_tracks)        
+    """
+
+    def find_unmatched_idx(num_obj: int, matched_obj_idx: np.ndarray) -> np.ndarray:
+        assert matched_obj_idx.shape == (matched_obj_idx.shape[0], ), f"expect matched_obj_idx has 1 dim, get {matched_obj_idx.shape}"
+        all_idx = np.arange(num_obj)
+
+        if matched_obj_idx.shape[0] == 0:
+            return all_idx
+
+        mask_matched = np.any(all_idx[np.newaxis, :] == matched_obj_idx.reshape(-1, 1), axis=0)
+        unmatched_idx = all_idx[np.logical_not(mask_matched)]
+        return unmatched_idx
+
+    matched_indices = greedy_match(cost_matrix)
+
+    # find good matches
+    if square_cost_threshold:
+        cost_threshold = np.square(cost_threshold)
+
+    matched_cost = cost_matrix[matched_indices[:, 0], matched_indices[:, 1]]  # (num_matches)
+    mask_good_matches = matched_cost < cost_threshold
+    matched_indices = matched_indices[mask_good_matches]  # (num_good_matches, 2) - (det_idx, track_idx)
+
+    # find unmatched dets
+    unmatched_dets_idx = find_unmatched_idx(cost_matrix.shape[0], matched_indices[:, 0])
+
+    # find unmatched tracks
+    unmatched_tracks_idx = find_unmatched_idx(cost_matrix.shape[1], matched_indices[:, 1])
+
+    return matched_indices, unmatched_dets_idx, unmatched_tracks_idx
