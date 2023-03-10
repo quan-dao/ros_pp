@@ -1,10 +1,13 @@
 import numpy as np
 from pathlib import Path
 from nuscenes import NuScenes
+import matplotlib.pyplot as plt
+import time
 
 from nuscenes_tools import get_nuscenes_point_cloud, get_nuscenes_sensor_pose_in_global
 from geometry_tools import apply_tf
-from visualization_tools import show_point_cloud
+from visualization_tools import show_point_cloud, show_bird_eye_view
+from mot.ab3dmot import track_1step
 
 
 POINT_CLOUD_RANGE = np.array([-51.2, -51.2, -5.0, 51.2, 51.2, 3.0])
@@ -18,8 +21,17 @@ def main(scene_idx, init_sample_idx):
     dets_file_idx = dets_file_idx[sorted_idx].tolist()
     dets_file = [dets_file[idx] for idx in sorted_idx.tolist()]
 
-    nusc = NuScenes(dataroot='/home/user/dataset/nuscenes', version='v1.0-mini')
+    viz_root = Path(f'artifacts/viz_nuscenes_scene{scene_idx}_initSampleIdx{init_sample_idx}')
+    viz_root.mkdir(exist_ok=True)
+
+    nusc = NuScenes(dataroot='/home/user/dataset/nuscenes', version='v1.0-mini', verbose=False)
     target_SE3_glob = None
+
+    # init tracks
+    num_state, num_info = 11, 3
+    tracks = np.zeros((0, num_state + num_info))
+    tracks_P = np.zeros((0, num_state, num_state))
+    track_counter = 0
 
     for sample_idx, filename in zip(dets_file_idx, dets_file):
         print(f'{sample_idx} | {filename}') 
@@ -51,8 +63,37 @@ def main(scene_idx, init_sample_idx):
         boxes[:, :3] = target_SE3_boxes[:, :3, -1]
         boxes[:, 6] = np.arctan2(target_SE3_boxes[:, 1, 0], target_SE3_boxes[:, 0, 0])
 
+        # tracking
+        # =============================================================
+        
+        # organize boxes for tracking
+        boxes_cls = boxes[:, -2].astype(int)
+        boxes = boxes[:, [0, 1, 2, 6, 3, 4, 5]]  # (N, 7) - x, y, z, YAW, length, width, height
+        chosen_cls_idx = 0  # car
+
+        # invoke track
+        tic = time.time()
+        tracks, tracks_P, track_counter = track_1step(tracks, tracks_P, track_counter, boxes[boxes_cls == chosen_cls_idx], chosen_cls_idx)
+        print(f"{sample_idx} | track time: {time.time() - tic}")
+
+        # format output
+        mask_report_tracks = tracks[:, -3] > 1
+        tracked_boxes = tracks[mask_report_tracks]
+        tracked_boxes = tracked_boxes[:, [0, 1, 2, 4, 5, 6, 3]]
+        tracked_id = tracks[mask_report_tracks, -1].astype(int)
+
         # display
-        show_point_cloud(points[:, 1: 4], boxes, show_lidar_frame=True)
+        # ============================================================
+        print(f"{sample_idx} | track_counter: {track_counter}")
+        print('-------------------------')
+        boxes = boxes[:, [0, 1, 2, 4, 5, 6, 3]]
+        # show_point_cloud(points[:, 1: 4], boxes, show_lidar_frame=True)
+        
+        fig, axe = plt.subplots()
+        show_bird_eye_view(axe, points[:, 1: 4], tracked_boxes, boxes_id=tracked_id, point_cloud_range=POINT_CLOUD_RANGE, resolution_xy=0.2)
+        fig.savefig(viz_root / f'bev_sample_{sample_idx}.png')
+
+        # break
 
 
 if __name__ == '__main__':

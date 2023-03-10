@@ -2,10 +2,9 @@ import numpy as np
 import torch
 from pathlib import Path
 from typing import List, Tuple, Union
-import os.path as osp
-import subprocess
-from tqdm import tqdm
 import open3d as o3d
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import Axes
 
 
 Tensor = Union[torch.Tensor, np.ndarray]
@@ -155,3 +154,49 @@ def show_point_cloud(xyz: Tensor, boxes: Tensor = None, xyz_color: Tensor = None
 
     o3d.visualization.draw_geometries(obj_to_display)
 
+
+def show_bird_eye_view(axe: Axes, 
+                       xyz: np.ndarray, boxes: np.ndarray, 
+                       point_cloud_range: np.ndarray,
+                       resolution_xy: float,
+                       boxes_color: np.ndarray = None, boxes_id: np.ndarray = None):
+    
+    # Show Points:
+    # -----------------
+    bev_size_xy = np.ceil((point_cloud_range[3: 5] - point_cloud_range[:2]) / resolution_xy).astype(int)
+    bev_img = np.zeros((bev_size_xy[1], bev_size_xy[0]))  # (H, W)
+    
+    # find occupied pillars
+    mask_in_range = np.logical_and(xyz[:, :2] > point_cloud_range[:2], xyz[:, :2] < point_cloud_range[3: 5]).all(axis=1)
+    bev_xy = np.floor((xyz[mask_in_range, :2] - point_cloud_range[:2]) / resolution_xy).astype(int)  # (N_pts, 2)
+    bev_flat_coord = bev_xy[:, 1] * bev_size_xy[0] + bev_xy[:, 0]  # (N_pts)
+    unq_coord = np.unique(bev_flat_coord)
+    occ_pillar_y = unq_coord // bev_size_xy[0]
+    occ_pillar_x = unq_coord % bev_size_xy[0]
+    bev_img[occ_pillar_y, occ_pillar_x] = 1.0
+    
+    axe.imshow(bev_img, origin='lower')
+
+    # Show Boxes:
+    # -----------------
+    boxes_vers = find_boxes_corners(boxes)  # List[(8, 3)]
+    for bidx, vers in enumerate(boxes_vers):
+        top = vers[[0, 1, 5, 4], :2]  # (4, 2)
+        # to bev
+        top = (top - point_cloud_range[:2]) / resolution_xy  # (N_pts, 2)
+        axe.plot(top[[0, 1, 2, 3, 0], 0], top[[0, 1, 2, 3, 0], 1], 'r-')
+        
+        top_center = np.mean(top[[0, 2]], axis=0)
+        mid_forward_edge = np.mean(top[[0, 1]], axis=0)
+        axe.plot([top_center[0], mid_forward_edge[0]], [top_center[1], mid_forward_edge[1]], 'b-')
+
+        if boxes_id is not None:
+            this_id = boxes_id[bidx]
+            axe.annotate(str(this_id), 
+                         xy=(top_center[0], top_center[1]), xycoords='data',
+                         xytext=(top_center[0], top_center[1]), textcoords='data',
+                         size=15, color='white',
+                         va="center", ha="center")
+            
+    axe.set_xlim([0, bev_size_xy[0]])
+    axe.set_ylim([0, bev_size_xy[1]])
