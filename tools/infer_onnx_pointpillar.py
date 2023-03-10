@@ -3,6 +3,7 @@ import torch
 import onnx
 import onnxruntime as ort
 import time
+from pathlib import Path
 
 from cfgs.nuscenes_models.cfg_cbgs_dyn_pp_centerpoint import data_cfg, model_cfg
 from export_pointpillar import make_dummy_input, remove_points_outside_range, CenterPointPart0
@@ -21,13 +22,19 @@ def main():
     print('check complete')
     ort_session = ort.InferenceSession(onnx_file, providers=["CUDAExecutionProvider"])
 
-    points = make_dummy_input()
-    points_ = remove_points_outside_range(points, np.array(data_cfg.POINT_CLOUD_RANGE))
+    scene_idx = 2
+    init_sample_idx = 5
+    detection_root = Path(f'artifacts/nuscenes_scene{scene_idx}_initSampleIdx{init_sample_idx}')
+    detection_root.mkdir(exist_ok=True)
 
     for i in range(10):
+        current_sample_idx = init_sample_idx + i
+        points = make_dummy_input(scene_idx=scene_idx, target_sample_idx=current_sample_idx)
+        points = remove_points_outside_range(points, np.array(data_cfg.POINT_CLOUD_RANGE))
+
         time_tic = time.time()
 
-        points = torch.from_numpy(np.copy(points_)).float().cuda()
+        points = torch.from_numpy(points).float().cuda()
 
         with torch.no_grad():
             voxel_coords, features = part0(points)
@@ -46,10 +53,11 @@ def main():
         print(f"{i} time_to_gpu: ", time_to_gpu)
         print(f'{i} infer time: ', time_infer)
 
-    batch_boxes = outputs[0]
-    print('batch_boxes: ', batch_boxes.shape)
+        batch_boxes = outputs[0]
+        print(f'{i} batch_boxes: ', batch_boxes.shape)
+        print('-----------------')
 
-    np.save('dummy_output_no_nms.npy', batch_boxes)
+        np.save(detection_root / f'pred_boxes_sampleIdx_{current_sample_idx}.npy', batch_boxes)
 
 
 if __name__ == '__main__':

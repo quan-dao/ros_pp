@@ -119,7 +119,7 @@ def make_dummy_input(scene_idx=1, target_sample_idx=10, pad_points_with_batch_id
         pc = np.pad(pc, pad_width=[(0, 0), (0, 1)], mode='constant', constant_values=time_lag)  # (N, 5)
         return pc
 
-    nusc = NuScenes(dataroot='../data/nuscenes/v1.0-mini', version='v1.0-mini', verbose=True)
+    nusc = NuScenes(dataroot='../data/nuscenes/v1.0-mini', version='v1.0-mini', verbose=False)
     scene = nusc.scene[scene_idx]
     sample_tk = scene['first_sample_token']
     for _ in range(target_sample_idx):
@@ -177,7 +177,7 @@ if __name__ == '__main__':
                     do_constant_folding=True,
                     input_names=['voxel_coords', 'features'],
                     output_names=['batch_boxes'],
-                    dynamic_axes={'voxel_coords': {0: 'num_pillars'},
+                    dynamic_axes={'voxel_coords': {0: 'num_pillars'}, 'features': {0: 'num_pillars'},
                                     'batch_boxes': {0: 'num_boxes'}}
                     )
 
