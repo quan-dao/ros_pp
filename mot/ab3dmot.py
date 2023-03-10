@@ -52,8 +52,8 @@ def wrapper_kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, 
     return tracks, tracks_P
 
 
-def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, detections: np.ndarray, 
-                chosen_class_idx: int, cost_threshold=11.0, detection_yaw_last=True) -> Tuple[np.ndarray, np.ndarray, int]:
+def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, dets: np.ndarray, 
+                chosen_class_idx: int, cost_threshold=11.0) -> Tuple[np.ndarray, np.ndarray, int]:
     """
     Args:
         tracks: (N, 11 + 3) - state (11), info (3)
@@ -61,9 +61,8 @@ def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, de
         track_counter: to make track_id
         detections: (M, 9) - detections [x, y, z, dx, dy, dz, yaw, score, label]
         chosen_class_idx: class of object to track
-        detection_yaw_last:
     """
-    assert detections.shape[1] == 9, f"expect 9 (x, y, z, dx, dy, dz, yaw, score, label), get {detections.shape[1]}"
+    assert dets.shape[1] == 7, f"expect 7 (x, y, z, yaw, dx, dy, dz), get {dets.shape[1]}"
     F = TRANSITION_MATRIX
     H = MEASUREMENT_MATRIX
     cls_name = CLASS_NAMES[chosen_class_idx]
@@ -75,12 +74,6 @@ def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, de
     tracks, tracks_P = wrapper_kf_predict(tracks, tracks_P, F, Q)
 
     # KF update
-
-    if detection_yaw_last:
-        detections = detections[:, [0, 1, 2, 6, 3, 4, 5]]
-
-    dets = detections[detections[:, -1].astype(int) == chosen_class_idx]
-
     if dets.shape[0] > 0 and tracks.shape[0] > 0:
         tracks_obs, tracks_S = batch_kf_predict_measurement(tracks, tracks_P, H, R)
         cost = build_cost_matrix(tracks_obs, tracks_S, dets)
@@ -114,12 +107,12 @@ def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, de
             tracks_P = np.concatenate([tracks_P, new_tracks_P])
 
     else:
-        if dets.shape[0] == 0:
+        if dets.shape[0] == 0 and tracks.shape[0] > 0:
             # update tracks info
             tracks[:, -3] = 0  # num_hit get reset
             tracks[:, -2] += 1
         
-        elif tracks.shape[0] == 0:
+        elif tracks.shape[0] == 0 and dets.shape[0] > 0:
             tracks, tracks_P, track_counter = spawn_new_tracks(dets, P_0, track_counter)
             
     # kill death track

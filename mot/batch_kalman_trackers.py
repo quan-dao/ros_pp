@@ -115,8 +115,8 @@ def batch_kf_update(tracks: np.ndarray, tracks_P: np.ndarray, observations: np.n
         tracks: (N, 11 + 3) according to (2)
         tracks_P: (N, 11, 11) according to (3)
     """
-    obs, S = batch_kf_predict_measurement(tracks, tracks_P, H, R)
-    K = np.einsum('bij, jk, kh -> bih', tracks_P, H.T, np.linalg.inv(S))  # (N, 11, 7)
+    obs, S = batch_kf_predict_measurement(tracks, tracks_P, H, R)  # S: (N, 7, 7)
+    K = np.einsum('bii, ik, bkk -> bik', tracks_P, H.T, np.linalg.inv(S))  # (N, 11, 7)
     innov = observations - obs  # (N, 7)
     tracks[:, :11] = tracks[:, :11] + np.einsum('bih, bh -> bi', K, innov)
     tracks_P = tracks_P - np.einsum('bij, bjk, kh -> bih', tracks_P, K, H)
