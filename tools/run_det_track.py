@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 
-from cfgs.nuscenes_models.cfg_cbgs_dyn_pp_centerpoint import data_cfg
-from export_pointpillar import CenterPointPart0
+from .cfgs.nuscenes_models.cfg_cbgs_dyn_pp_centerpoint import data_cfg
+from .export_pointpillar import CenterPointPart0
 from mot.ab3dmot import track_1step
-from visualization_tools import show_bird_eye_view
+from .visualization_tools import show_bird_eye_view
 
 
 POINT_CLOUD_RANGE = data_cfg.POINT_CLOUD_RANGE
@@ -21,11 +21,11 @@ class Detector(object):
     def __init__(self, score_threshold: float = 0.3):
         self._score_threshold = score_threshold
         self.part0 = CenterPointPart0()
-        self.part0.load_params_from_file(filename='./pretrained_models/cbgs_pp_centerpoint_nds6070.pth', to_cpu=True)
+        self.part0.load_params_from_file(filename='/home/host/Desktop/quan_ws/ros_pp/tools/pretrained_models/cbgs_pp_centerpoint_nds6070.pth', to_cpu=True)
         self.part0.eval()
         self.part0.cuda()
 
-        onnx_file = "pointpillar_onnx/pointpillar_part1_no_nms.onnx"
+        onnx_file = "/home/host/Desktop/quan_ws/ros_pp/tools/pointpillar_onnx/pointpillar_part1_no_nms.onnx"
         onnx_part1 = onnx.load(onnx_file)
         onnx.checker.check_model(onnx_part1)
         print('check complete')
@@ -59,7 +59,9 @@ class Tracktor(object):
                  cost_threshold: float = 11.0,
                  min_hit_to_report: int = 2,
                  indices_to_format_input: List[int] = [0, 1, 2, 6, 3, 4, 5], 
-                 indices_to_format_output: List[int] = [0, 1, 2, 4, 5, 6, 3]):
+                 indices_to_format_output: List[int] = [0, 1, 2, 4, 5, 6, 3],
+                 track_couters_init: int = 0,
+                 num_miss_to_kill: int = 3):
         """
         State: (x, y, z, yaw, l, w, h, dx, dy, dz, dyaw)
         
@@ -80,7 +82,8 @@ class Tracktor(object):
         # init tracks' state & their covariance
         self.tracks = np.zeros((0, self._num_state + self._num_info))
         self.tracks_P = np.zeros((0, self._num_state, self._num_state))
-        self.track_counter = 0
+        self.track_counter = track_couters_init
+        self.num_miss_to_kill = num_miss_to_kill
 
     def update_(self, detections: np.ndarray) -> None:
         """
@@ -100,7 +103,7 @@ class Tracktor(object):
                                                                      self.track_counter, 
                                                                      boxes[boxes_cls == self._chosen_class_index], 
                                                                      self._chosen_class_index,
-                                                                     self._cost_threshold)
+                                                                     self._cost_threshold, self.num_miss_to_kill)
     
     def report_tracks(self) -> Tuple[np.ndarray]:
         """
@@ -161,7 +164,7 @@ class DataGenerator(object):
 
 
 def main():
-    data_gen = DataGenerator(dataroot=Path('./artifacts/Clouds_02_21-15_02_38_0'), num_sweeps=1)
+    data_gen = DataGenerator(dataroot=Path('../data/Clouds_02_21-15_02_38_0'), num_sweeps=1)
     detector = Detector(score_threshold=0.2)
     tracktor_ped = Tracktor(chosen_class_index=8, cost_threshold=2.5)
 
