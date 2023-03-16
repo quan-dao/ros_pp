@@ -53,7 +53,7 @@ def wrapper_kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, 
 
 
 def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, dets: np.ndarray, 
-                chosen_class_idx: int, cost_threshold=11.0) -> Tuple[np.ndarray, np.ndarray, int]:
+                chosen_class_idx: int, cost_threshold=11.0, num_miss_to_kill: int = 3) -> Tuple[np.ndarray, np.ndarray, int]:
     """
     Args:
         tracks: (N, 11 + 3) - state (11), info (3)
@@ -116,7 +116,7 @@ def track_1step(tracks: np.ndarray, tracks_P: np.ndarray, track_counter: int, de
             tracks, tracks_P, track_counter = spawn_new_tracks(dets, P_0, track_counter)
             
     # kill death track
-    mask_alive = tracks[:, -2] < 3
+    mask_alive = tracks[:, -2] < num_miss_to_kill
     tracks = tracks[mask_alive]
     tracks_P = tracks_P[mask_alive]
 
