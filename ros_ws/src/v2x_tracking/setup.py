@@ -9,6 +9,6 @@ setup(
     'torch',
     'matplotlib.pyplot'
     ],
-    scripts = ['scripts/v2x_tracking_node.py','scripts/viz_node.py','scripts/communication_node.py' ],
+    scripts = ['scripts/v2x_tracking_node.py',],
     package_dir={'': 'src'}
 )

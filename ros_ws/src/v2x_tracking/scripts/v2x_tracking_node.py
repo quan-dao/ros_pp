@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 # ROS sensor_msg dependencies
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import String, ColorRGBA
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Quaternion, TransformStamped
 from visualization_msgs.msg import Marker, MarkerArray
 # from builtin_interfaces.msg import Duration
 import sensor_msgs.point_cloud2 as pc2
+from tf2_msgs.msg import TFMessage
+import tf2_ros
 # Custom Tracking library dependencies
 from  tools.run_det_track import Detector, Tracktor
 from functools import partial
@@ -46,11 +48,20 @@ def viz(boxes, frame):
     return msg_array
 
 def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_threshold: float = None):
+    node_name = rospy.get_param("~node_name", "rsu")
+    print(f'timestamp_{rospy.get_param("~node_name", "rsu")} {msg.header.stamp.secs}')
     
-    tic = time.time()
+    tf_msg = TransformStamped()
+    tf_msg.header.stamp = rospy.Time(msg.header.stamp.secs, msg.header.stamp.nsecs)
+    tf_msg.header.frame_id = "map"
+    tf_msg.child_frame_id = "ZOE3/os_sensor" if node_name == 'car' else "base_link"
+    tf_msg.transform.rotation.w = 1.0
+    tf_msg.transform.translation.x = 0.0 if node_name == 'car' else 5.0
+    _msg = TFMessage([tf_msg])
+    tf_publisher.publish(_msg)
     
     # Convert PointCloud2 in numpy array of size (N, 6) - batch_idx, x, y, z, intensity, time_lag (== 0.0)
-    points = np.asarray(list(pc2.read_points(msg, skip_nans=True)))[:,:6]
+    points = np.asarray(list(pc2.read_points(msg, skip_nans=True)))[:,:5]
     # stamp_nsecs = msg.header.stamp.nsecs
     # stamp_secs = data.header.stamp.secs
     points[:,4] = 0.0
@@ -72,10 +83,9 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
 
     # pad points with batch_idx (==0 for online inference)
     points = np.pad(points, pad_width=[(0, 0), (1, 0)], constant_values=0.0)
-    
+    rospy.loginfo(f'points shape is {points.shape}')
     # detection
     boxes = detector.detect(points)
-    
     # tracking ped
     tracktor_ped.update_(boxes)
     tracked_boxes, tracked_id = tracktor_ped.report_tracks()
@@ -102,19 +112,16 @@ def main():
 
     wrapper_lidar_cb = partial(LIDAR_cb, 
                                points_yaw_threshold_degree=points_yaw_threshold_degree, 
-                               points_depth_threshold=points_yaw_threshold_degree)  # TODO: get his from launch file
-
-    rospy.Subscriber("velodyne_points", PointCloud2, wrapper_lidar_cb)
-    # rospy.Subscriber("test", String, callback)
-    # rospy.Subscriber("ZOE3/os_cloud_node/points", PointCloud2, callback)
-    # points = np.array([[1,2,3,4,5,6]]) # dummy value
+                               points_depth_threshold=points_yaw_threshold_degree)
     
-    # MarkerArray = np.array([1,2,3,4]) # dummy value
+    rospy.Subscriber("velodyne_points", PointCloud2, wrapper_lidar_cb)
+    
     rospy.spin()
 
 if __name__ == '__main__':
     # Initialisation of ROS publisher
     pub = rospy.Publisher("test", MarkerArray, queue_size=10)
+    tf_publisher = rospy.Publisher("/tf", TFMessage, queue_size=1)
     # Initialisation of the detector and tracktor
     detection_score_threshold = rospy.get_param("~detection_score_threshold", 0.2)
     tracking_cost_threshold_ped = rospy.get_param("~tracking_cost_threshold_ped", 2.5)
