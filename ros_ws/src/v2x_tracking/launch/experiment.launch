@@ -3,43 +3,32 @@
         <param name="/use_sim_time" value="true"/>
     </node>
 
-    <node pkg="rosbag" type="play" name="player_car" args="--loop /home/host/Desktop/quan_ws/ros_pp/data/bags/ouster/pointcloud_16_34_19.bag">
+    <node pkg="rosbag" type="play" name="player_car" args="-l /home/host/Desktop/quan_ws/ros_pp/data/bags/ouster/pointcloud_16_34_19.bag">
         <param name="/use_sim_time" value="true"/>
     </node>
 
-    <node pkg="v2x_tracking" name="v2x_tracking_node" type="v2x_tracking_node.py">
+    <node pkg="v2x_tracking" name="v2x_tracking_node" type="v2x_tracking_node.py" output="screen">
         <param name="/use_sim_time" value="true"/>
-        
         <param name="node_name" value="rsu"/>
 
-        <remap from="velodyne_points" to="/velodyne_points"/>
-        
+        <remap from="velodyne_points" to="velodyne_points"/>
         <remap from="test" to="rsu_tracks"/>
         
         <param name="detection_score_threshold" value="0.2"/>
-        
-        <param name="num_miss_to_kill" value="10"/>
+        <param name="num_miss_to_kill" value="5"/>
     </node>
 
     <node pkg="v2x_tracking" name="v2x_tracking_node_ouster" type="v2x_tracking_node.py" output="screen">
-        <param name="/use_sim_time" value="true"/>
-        
+        <param name="/use_sim_time" value="true"/>        
         <param name="node_name" value="car"/>
         
-        <remap from="velodyne_points" to="ZOE3/os_cloud_node/points"/>
-        
+        <remap from="velodyne_points" to="ZOE3/os_cloud_node/points"/>        
         <remap from="test" to="car_tracks"/>
 
-        <param name="detection_score_threshold" value="0.2"/>
-        
+        <param name="detection_score_threshold" value="0.2"/>        
         <param name="num_miss_to_kill" value="10"/>
-        
         <param name="points_yaw_threshold_degree" value="30"/>
-        
     </node>
     
-    <!-- <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 0 1 ZOE3/os_sensor base_link 100">
-        <param name="/use_sim_time" value="true"/>
-    </node> -->
 
 </launch>

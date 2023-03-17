@@ -13,9 +13,12 @@ from visualization_msgs.msg import Marker, MarkerArray
 import sensor_msgs.point_cloud2 as pc2
 from tf2_msgs.msg import TFMessage
 import tf2_ros
+from tf.transformations import quaternion_from_euler
 # Custom Tracking library dependencies
 from  tools.run_det_track import Detector, Tracktor
 from functools import partial
+from typing import List
+
 
 
 def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
@@ -49,17 +52,50 @@ def viz(boxes, frame):
 
 def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_threshold: float = None):
     node_name = rospy.get_param("~node_name", "rsu")
+    tf_ouster_to_map_transl = [
+        rospy.get_param('~tf_ouster_to_map_transl_x', 0.),
+        rospy.get_param('~tf_ouster_to_map_transl_y', 0.),
+        rospy.get_param('~tf_ouster_to_map_transl_z', 0.)
+    ]
+
+    tf_ouster_to_map_yaw_rad = rospy.get_param("~tf_ouster_to_map_yaw_rad", 0.)
+
     print(f'timestamp_{rospy.get_param("~node_name", "rsu")} {msg.header.stamp.secs}')
+    print(f'{tf_ouster_to_map_transl}')
+    print('-----------------------------------')
     
     tf_msg = TransformStamped()
     tf_msg.header.stamp = rospy.Time(msg.header.stamp.secs, msg.header.stamp.nsecs)
     tf_msg.header.frame_id = "map"
     tf_msg.child_frame_id = "ZOE3/os_sensor" if node_name == 'car' else "base_link"
-    tf_msg.transform.rotation.w = 1.0
-    tf_msg.transform.translation.x = 0.0 if node_name == 'car' else 5.0
+    
+    if node_name == 'rsu':
+        q = quaternion_from_euler(0., 0., 5.2176 - np.deg2rad(5.))
+        tf_msg.transform.translation.x = 1172.5
+        tf_msg.transform.translation.y = 759.0
+        tf_msg.transform.translation.z = 1.0
+
+    elif node_name == 'car':
+        q = quaternion_from_euler(0., 0., 2.0176)
+        tf_msg.transform.translation.x = 1186.51
+        tf_msg.transform.translation.y = 756.045
+        tf_msg.transform.translation.z = -0.00143
+
+    else:
+        raise ValueError('unsupported node name, go see your doctor')
+    
+    tf_msg.transform.rotation.x = q[0]
+    tf_msg.transform.rotation.y = q[1]
+    tf_msg.transform.rotation.z = q[2]
+    tf_msg.transform.rotation.w = q[3]
+
     _msg = TFMessage([tf_msg])
     tf_publisher.publish(_msg)
-    
+
+    if node_name == 'car':    
+        # early return
+        return
+        
     # Convert PointCloud2 in numpy array of size (N, 6) - batch_idx, x, y, z, intensity, time_lag (== 0.0)
     points = np.asarray(list(pc2.read_points(msg, skip_nans=True)))[:,:5]
     # stamp_nsecs = msg.header.stamp.nsecs
@@ -105,7 +141,6 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
 
 
 def main():
-    rospy.init_node('v2x_tracking_node')
     points_yaw_threshold_degree = rospy.get_param("~points_yaw_threshold_degree", None)
     points_yaw_threshold_degree = rospy.get_param("~points_depth_threshold", None)
 
@@ -119,6 +154,7 @@ def main():
     rospy.spin()
 
 if __name__ == '__main__':
+    rospy.init_node('v2x_tracking_node')
     # Initialisation of ROS publisher
     pub = rospy.Publisher("test", MarkerArray, queue_size=10)
     tf_publisher = rospy.Publisher("/tf", TFMessage, queue_size=1)
@@ -128,16 +164,20 @@ if __name__ == '__main__':
     tracking_cost_threshold_car = rospy.get_param("~tracking_cost_threshold_car", 5.5)
     num_miss_to_kill = rospy.get_param("~num_miss_to_kill", 10)
     
-    detector = Detector(score_threshold=detection_score_threshold)
-    
-    tracktor_ped = Tracktor(chosen_class_index=8, 
-                            cost_threshold=tracking_cost_threshold_ped, 
-                            num_miss_to_kill=num_miss_to_kill)
-    
-    tracktor_car = Tracktor(chosen_class_index=0, 
-                            cost_threshold=tracking_cost_threshold_car, 
-                            track_couters_init=10000, 
-                            num_miss_to_kill=num_miss_to_kill)
+    node_name = rospy.get_param("~node_name", "rsu")
+    if node_name == 'rsu':
+        detector = Detector(score_threshold=detection_score_threshold)
+        
+        tracktor_ped = Tracktor(chosen_class_index=8, 
+                                cost_threshold=tracking_cost_threshold_ped, 
+                                num_miss_to_kill=num_miss_to_kill)
+        
+        tracktor_car = Tracktor(chosen_class_index=0, 
+                                cost_threshold=tracking_cost_threshold_car, 
+                                track_couters_init=10000, 
+                                num_miss_to_kill=num_miss_to_kill)
+    else:
+        detector, tracktor_ped, tracktor_car = None, None, None
     main()
 
 	
