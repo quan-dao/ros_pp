@@ -13,6 +13,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 import sensor_msgs.point_cloud2 as pc2
 # Custom Tracking library dependencies
 from  tools.run_det_track import Detector, Tracktor
+from functools import partial
 
 
 def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
@@ -24,14 +25,14 @@ def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
     return Quaternion(x=qx,y=qy,z=qz,w=qw)
 
 
-def viz(boxes):
+def viz(boxes, frame):
     msg_array = MarkerArray()
     # self.get_logger().info('Msgs received, time=%s' % time_stamp)*
     for box in boxes:
         msg = Marker()
         msg.type = 1
         msg.id = int(box[7])
-        msg.header.frame_id = msg.header.frame_id
+        msg.header.frame_id = frame
         msg.scale.x, msg.scale.y, msg.scale.z = box[3], box[4], box[5]
         msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = box[0], box[1], box[2]
         msg.pose.orientation = euler_to_quaternion(box[6])
@@ -44,7 +45,7 @@ def viz(boxes):
 
     return msg_array
 
-def LIDAR_cb(msg):
+def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_threshold: float = None):
     
     tic = time.time()
     
@@ -53,6 +54,23 @@ def LIDAR_cb(msg):
     # stamp_nsecs = msg.header.stamp.nsecs
     # stamp_secs = data.header.stamp.secs
     points[:,4] = 0.0
+
+    if points_yaw_threshold_degree is not None:
+        points_yaw_threshold = np.deg2rad(points_yaw_threshold_degree)
+        assert points_yaw_threshold > 0, f"expect positive yaw threshold, get {points_yaw_threshold}"
+        # remove points behind LiDAR
+        points = points[points[:, 0] < -1]
+        # remove points having outside of range
+        yaw = np.arctan2(points[:, 0], points[:, 1])
+        mask_yaw_in_range = np.abs(yaw) < points_yaw_threshold
+        points = points[mask_yaw_in_range]
+
+    if points_depth_threshold is not None:
+        points_depth_sqr = np.square(points[:, :2]).sum(axis=1)
+        mask_depth_in_range = points_depth_sqr < points_depth_threshold**2
+        points = points[mask_depth_in_range]
+
+    # pad points with batch_idx (==0 for online inference)
     points = np.pad(points, pad_width=[(0, 0), (1, 0)], constant_values=0.0)
     
     # detection
@@ -70,15 +88,23 @@ def LIDAR_cb(msg):
     tracked_cars = np.concatenate([car_boxes, cars_id[:, np.newaxis]], axis=1)
     tracked_cars = np.pad(tracked_cars, pad_width=[(0, 0), (0, 1)], constant_values=0.)
     
+    frame = msg.header.frame_id
     track_result = np.concatenate([track_ped, tracked_cars])
-    pub.publish(viz(track_result))
+    pub.publish(viz(track_result, frame))
     
 
 
 def main():
     rospy.init_node('v2x_tracking_node')
+    points_yaw_threshold_degree = rospy.get_param("~points_yaw_threshold_degree", None)
+    points_yaw_threshold_degree = rospy.get_param("~points_depth_threshold", None)
 
-    rospy.Subscriber("velodyne_points", PointCloud2, LIDAR_cb)
+
+    wrapper_lidar_cb = partial(LIDAR_cb, 
+                               points_yaw_threshold_degree=points_yaw_threshold_degree, 
+                               points_depth_threshold=points_yaw_threshold_degree)  # TODO: get his from launch file
+
+    rospy.Subscriber("velodyne_points", PointCloud2, wrapper_lidar_cb)
     # rospy.Subscriber("test", String, callback)
     # rospy.Subscriber("ZOE3/os_cloud_node/points", PointCloud2, callback)
     # points = np.array([[1,2,3,4,5,6]]) # dummy value
@@ -90,9 +116,21 @@ if __name__ == '__main__':
     # Initialisation of ROS publisher
     pub = rospy.Publisher("test", MarkerArray, queue_size=10)
     # Initialisation of the detector and tracktor
-    detector = Detector(score_threshold=0.2)
-    tracktor_ped = Tracktor(chosen_class_index=8, cost_threshold=2.5, num_miss_to_kill=5)
-    tracktor_car = Tracktor(chosen_class_index=0, cost_threshold=2.5, track_couters_init=10000, num_miss_to_kill=5)
+    detection_score_threshold = rospy.get_param("~detection_score_threshold", 0.2)
+    tracking_cost_threshold_ped = rospy.get_param("~tracking_cost_threshold_ped", 2.5)
+    tracking_cost_threshold_car = rospy.get_param("~tracking_cost_threshold_car", 5.5)
+    num_miss_to_kill = rospy.get_param("~num_miss_to_kill", 10)
+    
+    detector = Detector(score_threshold=detection_score_threshold)
+    
+    tracktor_ped = Tracktor(chosen_class_index=8, 
+                            cost_threshold=tracking_cost_threshold_ped, 
+                            num_miss_to_kill=num_miss_to_kill)
+    
+    tracktor_car = Tracktor(chosen_class_index=0, 
+                            cost_threshold=tracking_cost_threshold_car, 
+                            track_couters_init=10000, 
+                            num_miss_to_kill=num_miss_to_kill)
     main()
 
 	

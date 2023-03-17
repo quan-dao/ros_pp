@@ -2,12 +2,14 @@
     
     
 
-    <node pkg="rosbag" type="play" name="player_car" args="--loop /home/user/Documents/records/PointClouds_car/pointcloud_16_34_19.bag">
+    <node pkg="rosbag" type="play" name="player_car" args="--loop /home/host/Desktop/quan_ws/ros_pp/data/bags/pointcloud_16_34_24.bag">
     <param name="/use_sim_time" value="true"/>
     </node>
 
     <node pkg="v2x_tracking" name="v2x_tracking_node" type="v2x_tracking_node.py">
-    <remap from="points" to="/ZOE3/os_cloud_node/points"/>
+    <remap from="points" to="/velodyne_points"/>
+    <param name="detection_score_threshold" value="0.2"/>
+    <param name="num_miss_to_kill" value="5"/>
     </node>
     
 
