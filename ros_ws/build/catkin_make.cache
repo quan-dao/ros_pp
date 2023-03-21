@@ -1,0 +1,2 @@
+v2x_tracking
+-DCATKIN_DEVEL_PREFIX=/home/user/Documents/ros_pp/ros_ws/devel -DCMAKE_INSTALL_PREFIX=/home/user/Documents/ros_pp/ros_ws/install -G Unix Makefiles
