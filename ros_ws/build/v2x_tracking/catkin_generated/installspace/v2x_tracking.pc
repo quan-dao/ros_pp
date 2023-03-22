@@ -1,8 +1,0 @@
-prefix=/home/user/Documents/ros_pp/ros_ws/install
-
-Name: v2x_tracking
-Description: Description of v2x_tracking
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

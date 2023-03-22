@@ -15,7 +15,7 @@ from tf2_msgs.msg import TFMessage
 import tf2_ros
 from tf.transformations import quaternion_from_euler
 # Custom Tracking library dependencies
-from tools.run_det_track import Detector, Tracktor
+from  tools.run_det_track import Detector, Tracktor
 from functools import partial
 from typing import List
 
@@ -58,20 +58,31 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
         rospy.get_param('~tf_ouster_to_map_transl_z', 0.)
     ]
 
+    tf_ouster_to_map_yaw_rad = rospy.get_param("~tf_ouster_to_map_yaw_rad", 0.)
+
     print(f'timestamp_{rospy.get_param("~node_name", "rsu")} {msg.header.stamp.secs}')
-    print(f'{tf_ouster_to_map_transl, tf_ouster_to_map_yaw_rad}')
+    print(f'{tf_ouster_to_map_transl}')
     print('-----------------------------------')
     
     tf_msg = TransformStamped()
     tf_msg.header.stamp = rospy.Time(msg.header.stamp.secs, msg.header.stamp.nsecs)
     tf_msg.header.frame_id = "map"
-    tf_msg.child_frame_id = rospy.get_param("~frame_id", "ZOE3/os_sensor")
+    tf_msg.child_frame_id = "ZOE3/os_sensor" if node_name == 'car' else "base_link"
     
-    tf_ouster_to_map_yaw_rad = rospy.get_param("~tf_ouster_to_map_yaw_rad", 2.0176)
-    q = quaternion_from_euler(0., 0., tf_ouster_to_map_yaw_rad)
-    tf_msg.transform.translation.x = rospy.get_param('~tf_ouster_to_map_transl_x', 1186.51)
-    tf_msg.transform.translation.y = rospy.get_param('~tf_ouster_to_map_transl_y', 756.045)
-    tf_msg.transform.translation.z = rospy.get_param('~tf_ouster_to_map_transl_z', -0.00143)
+    if node_name == 'rsu':
+        q = quaternion_from_euler(0., 0., 5.2176 - np.deg2rad(5.))
+        tf_msg.transform.translation.x = 1172.5
+        tf_msg.transform.translation.y = 759.0
+        tf_msg.transform.translation.z = 1.0
+
+    elif node_name == 'car':
+        q = quaternion_from_euler(0., 0., 2.0176)
+        tf_msg.transform.translation.x = 1186.51
+        tf_msg.transform.translation.y = 756.045
+        tf_msg.transform.translation.z = -0.00143
+
+    else:
+        raise ValueError('unsupported node name, go see your doctor')
     
     tf_msg.transform.rotation.x = q[0]
     tf_msg.transform.rotation.y = q[1]
@@ -153,8 +164,8 @@ if __name__ == '__main__':
     tracking_cost_threshold_car = rospy.get_param("~tracking_cost_threshold_car", 5.5)
     num_miss_to_kill = rospy.get_param("~num_miss_to_kill", 10)
     
-    detect_and_track = rospy.get_param("~detect_and_track", True)
-    if detect_and_track:
+    node_name = rospy.get_param("~node_name", "rsu")
+    if node_name == 'rsu':
         detector = Detector(score_threshold=detection_score_threshold)
         
         tracktor_ped = Tracktor(chosen_class_index=8, 
