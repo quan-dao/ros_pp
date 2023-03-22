@@ -59,19 +59,22 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
     ]
 
     print(f'timestamp_{rospy.get_param("~node_name", "rsu")} {msg.header.stamp.secs}')
-    print(f'{tf_ouster_to_map_transl, tf_ouster_to_map_yaw_rad}')
-    print('-----------------------------------')
-    
     tf_msg = TransformStamped()
     tf_msg.header.stamp = rospy.Time(msg.header.stamp.secs, msg.header.stamp.nsecs)
     tf_msg.header.frame_id = "map"
     tf_msg.child_frame_id = rospy.get_param("~frame_id", "ZOE3/os_sensor")
+    print(f'{tf_msg.child_frame_id}')
     
     tf_ouster_to_map_yaw_rad = rospy.get_param("~tf_ouster_to_map_yaw_rad", 2.0176)
     q = quaternion_from_euler(0., 0., tf_ouster_to_map_yaw_rad)
     tf_msg.transform.translation.x = rospy.get_param('~tf_ouster_to_map_transl_x', 1186.51)
     tf_msg.transform.translation.y = rospy.get_param('~tf_ouster_to_map_transl_y', 756.045)
     tf_msg.transform.translation.z = rospy.get_param('~tf_ouster_to_map_transl_z', -0.00143)
+
+
+    print(f'{tf_ouster_to_map_transl, tf_ouster_to_map_yaw_rad}')
+    print('-----------------------------------')
+    
     
     tf_msg.transform.rotation.x = q[0]
     tf_msg.transform.rotation.y = q[1]
@@ -81,7 +84,7 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
     _msg = TFMessage([tf_msg])
     tf_publisher.publish(_msg)
 
-    if node_name == 'car':    
+    if not detect_and_track:    
         # early return
         return
         
@@ -153,7 +156,7 @@ if __name__ == '__main__':
     tracking_cost_threshold_car = rospy.get_param("~tracking_cost_threshold_car", 5.5)
     num_miss_to_kill = rospy.get_param("~num_miss_to_kill", 10)
     
-    detect_and_track = rospy.get_param("~detect_and_track", True)
+    detect_and_track = rospy.get_param("~detect_and_track", False)
     if detect_and_track:
         detector = Detector(score_threshold=detection_score_threshold)
         
