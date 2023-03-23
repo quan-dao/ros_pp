@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/user/Documents/records/PointClouds_RSU/pointcloud_16_32_26.bag">
+    <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/host/Desktop/quan_ws/ros_pp/data/bags/pointcloud_16_32_26.bag">
         <param name="/use_sim_time" value="true"/>
     </node>
 <!-- 
@@ -14,7 +14,7 @@
         <remap from="velodyne_points" to="velodyne_points"/>
         <remap from="test" to="rsu_tracks"/>
 
-        <param name="detect_and_track" value="False"/>
+        <param name="detect_and_track" value="True"/>
         <param name="detection_score_threshold" value="0.2"/>
         <param name="num_miss_to_kill" value="5"/>
 

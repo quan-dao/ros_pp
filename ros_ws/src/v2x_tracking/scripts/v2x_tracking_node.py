@@ -16,7 +16,7 @@ from tf2_msgs.msg import TFMessage
 import tf2_ros
 from tf.transformations import quaternion_from_euler
 # Custom Tracking library dependencies
-# from tools.run_det_track import Detector, Tracktor
+from tools.run_det_track import Detector, Tracktor
 from functools import partial
 from typing import List
 
@@ -91,12 +91,8 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
 
     if not detect_and_track:    
         # early return
-        dummy_bbox = np.array([[0,0,0,0,0,0,0],
-                              [1,1,1,1,1,1,1],
-                              [1,1,1,1,1,1,1],
-                              [1,1,1,1,1,1,1],
-                              [1,1,1,1,1,1,1],                             
-                              ])
+        dummy_bbox = np.array([[0.5,0.5,0.5,0.5,0.5,0.5,0.5],
+                              [1.2,1.2,1.2,1.2,1.2,1.2,1.2]])
         pub_list_obstacle(dummy_bbox,"base_link")
         
         return
@@ -144,6 +140,7 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
     pub.publish(viz(track_result, frame))
 
     pub_list_obstacle(track_result, frame)
+    pub_list_obstacle(track_result,frame)
     
 
 
