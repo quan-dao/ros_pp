@@ -1,11 +1,11 @@
 <launch>
-    <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/host/Desktop/quan_ws/ros_pp/data/bags/pointcloud_16_34_24.bag">
+    <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/user/Documents/records/PointClouds_RSU/pointcloud_16_32_26.bag">
         <param name="/use_sim_time" value="true"/>
     </node>
-
+<!-- 
     <node pkg="rosbag" type="play" name="player_car" args="-l /home/host/Desktop/quan_ws/ros_pp/data/bags/ouster/pointcloud_16_34_19.bag">
         <param name="/use_sim_time" value="true"/>
-    </node>
+    </node> -->
 
     <node pkg="v2x_tracking" name="v2x_tracking_node" type="v2x_tracking_node.py" output="screen">
         <param name="/use_sim_time" value="true"/>
@@ -14,7 +14,7 @@
         <remap from="velodyne_points" to="velodyne_points"/>
         <remap from="test" to="rsu_tracks"/>
 
-        <param name="detect_and_track" value="True"/>
+        <param name="detect_and_track" value="False"/>
         <param name="detection_score_threshold" value="0.2"/>
         <param name="num_miss_to_kill" value="5"/>
 

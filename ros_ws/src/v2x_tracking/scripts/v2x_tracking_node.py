@@ -11,15 +11,20 @@ from geometry_msgs.msg import Quaternion, TransformStamped
 from visualization_msgs.msg import Marker, MarkerArray
 # from builtin_interfaces.msg import Duration
 import sensor_msgs.point_cloud2 as pc2
+from std_msgs.msg import Float32MultiArray
 from tf2_msgs.msg import TFMessage
 import tf2_ros
 from tf.transformations import quaternion_from_euler
 # Custom Tracking library dependencies
-from tools.run_det_track import Detector, Tracktor
+# from tools.run_det_track import Detector, Tracktor
 from functools import partial
 from typing import List
 
-
+def pub_list_obstacle(bboxes,frame_id):
+    bboxes = bboxes.reshape(-1).tolist()
+    array = Float32MultiArray()
+    array.data = bboxes
+    obstacle_publisher.publish(array)
 
 def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
     qx = np.sin(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) - np.cos(roll / 2) * np.sin(pitch / 2) * np.sin(yaw / 2)
@@ -86,6 +91,14 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
 
     if not detect_and_track:    
         # early return
+        dummy_bbox = np.array([[0,0,0,0,0,0,0],
+                              [1,1,1,1,1,1,1],
+                              [1,1,1,1,1,1,1],
+                              [1,1,1,1,1,1,1],
+                              [1,1,1,1,1,1,1],                             
+                              ])
+        pub_list_obstacle(dummy_bbox,"base_link")
+        
         return
         
     # Convert PointCloud2 in numpy array of size (N, 6) - batch_idx, x, y, z, intensity, time_lag (== 0.0)
@@ -129,6 +142,8 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
     frame = msg.header.frame_id
     track_result = np.concatenate([track_ped, tracked_cars])
     pub.publish(viz(track_result, frame))
+
+    pub_list_obstacle(track_result, frame)
     
 
 
@@ -150,6 +165,7 @@ if __name__ == '__main__':
     # Initialisation of ROS publisher
     pub = rospy.Publisher("test", MarkerArray, queue_size=10)
     tf_publisher = rospy.Publisher("/tf", TFMessage, queue_size=1)
+    obstacle_publisher = rospy.Publisher("obstacle_list", Float32MultiArray, queue_size=1)
     # Initialisation of the detector and tracktor
     detection_score_threshold = rospy.get_param("~detection_score_threshold", 0.2)
     tracking_cost_threshold_ped = rospy.get_param("~tracking_cost_threshold_ped", 2.5)
