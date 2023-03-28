@@ -7,7 +7,7 @@ project(icars_mosquitto)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs)
+find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs tf)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -103,14 +103,14 @@ add_executable(icars_mosquitto_publisher src/publisher_client.cpp)
 
 add_dependencies(icars_mosquitto_publisher ${catkin_EXPORTED_TARGETS})
 ## Specify libraries to link a library or executable target against
-target_link_libraries(icars_mosquitto_publisher ${catkin_LIBRARIES} mosquitto)
+target_link_libraries(icars_mosquitto_publisher ${catkin_LIBRARIES} ${tf_LIBRARIES} mosquitto)
 
 ## Declare a cpp executable
 add_executable(icars_mosquitto_subscriber src/subscriber_client.cpp)
 
 add_dependencies(icars_mosquitto_subscriber ${catkin_EXPORTED_TARGETS})
 ## Specify libraries to link a library or executable target against
-target_link_libraries(icars_mosquitto_subscriber ${catkin_LIBRARIES} mosquitto)
+target_link_libraries(icars_mosquitto_subscriber ${catkin_LIBRARIES} ${tf_LIBRARIES} mosquitto)
 
 #############
 ## Install ##

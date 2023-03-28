@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
         return(ret);        
     }
     
-    ros::Rate loop_rate(1);
+    ros::Rate loop_rate(10);
     // crée un subscriber du node de det&tracking 
     Bbox_Subscriber subscriber(n);
     while (ros::ok())

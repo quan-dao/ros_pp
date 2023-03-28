@@ -9,6 +9,7 @@
 #include "visualization_msgs/MarkerArray.h"
 #include "visualization_msgs/Marker.h"
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf/transform_listener.h>
 
 /*
  * This example shows how to write a client that subscribes to a topic and does
@@ -24,19 +25,39 @@
 using namespace std;
 visualization_msgs::MarkerArray obstacles;
 
+
 class MarkerArrayModifier
 {
 public:
   MarkerArrayModifier(string &topic, string &msg, visualization_msgs::MarkerArray &obstacles)
   {
+	
+	
 	int id = topic_hl(topic);
 	msg_hl(id, msg, obstacles);
+	// for (auto &obstacle : obstacles.markers){
+	// 	geometry_msgs::PoseStamped pose_in;
+	// 	pose_in.header = obstacle.header;
+	// 	pose_in.pose = obstacle.pose;
+		
+	// 	// tf::poseStampedMsgToTF(geometry_msgs::PoseStamped(obstacle.header, obstacle.pose), pose_in);
+	// 	geometry_msgs::PoseStamped pose_out;
+	// 	listener.transformPose("ZOE3/os_sensor", pose_in, pose_out);
+	// 	obstacle.pose = pose_out.pose;
+	// 	obstacle.header = pose_out.header;
+	// 	cout <<pose_in << "   :  \n "<< pose_out<< endl;
+	// 	cout << "-----------------------"<< endl;
+	// }
+	
+
+
         // Advertise the topic that provides the modified message
   }
 
 private:
   ros::Subscriber sub_;
   ros::Publisher pub_;
+  tf::TransformListener listener;
   visualization_msgs::MarkerArray modifiedMarkerArray_;
 
   int topic_hl(string &topic){
@@ -62,6 +83,7 @@ private:
 		getline(ss, token, '/');
 		tokens.push_back(token);
   }
+//   listener.waitForTransform("velodyne", "ZOE3/os_sensor", ros::Time(0), ros::Duration(3.0));
 	for(auto obstacle : obstacles.markers){
 		if(id == obstacle.id){
 			obstacle.pose.position.x = stof(tokens[0]);
@@ -76,11 +98,23 @@ private:
 			obstacle.pose.orientation.y = q_heading.getY();
 			obstacle.pose.orientation.z = q_heading.getZ();
 			obstacle.pose.orientation.w = q_heading.getW();
-			break;
+
+			// geometry_msgs::PoseStamped pose_in;
+			// pose_in.header = obstacle.header;
+			// pose_in.pose = obstacle.pose;
+			// geometry_msgs::PoseStamped pose_out;
+			// listener.transformPose("ZOE3/os_sensor", pose_in, pose_out);
+
+			// obstacle.pose = pose_out.pose;
+			// obstacle.header = pose_out.header;
+					break;
 		}
 	
 	}
 	visualization_msgs::Marker new_obstacle;
+	new_obstacle.ns = "obstacle";
+	
+
 	new_obstacle.pose.position.x = stof(tokens[0]);
 	new_obstacle.pose.position.y = stof(tokens[1]);
 	new_obstacle.pose.position.z = stof(tokens[2]);
@@ -96,10 +130,24 @@ private:
   
 	new_obstacle.header.frame_id = "velodyne";
 	new_obstacle.type = 1;
-	new_obstacle.color.b = 1.0;
+	if (stoi(tokens[7]) == 0){
+		new_obstacle.color.g = 0.5;
+		}
+	else  {new_obstacle.color.r = 0.5;
+	}
 	new_obstacle.color.a = 0.5;
 	new_obstacle.id = id;
 	new_obstacle.lifetime = ros::Duration(1.0);
+
+	// geometry_msgs::PoseStamped pose_in;
+	// pose_in.header = new_obstacle.header;
+	// pose_in.pose = new_obstacle.pose;
+	// geometry_msgs::PoseStamped pose_out;
+	// listener.transformPose("ZOE3/os_sensor", pose_in, pose_out);
+
+	// new_obstacle.pose = pose_out.pose;
+	// new_obstacle.header = pose_out.header;
+	obstacles.markers.clear();
 	obstacles.markers.push_back(new_obstacle);
 
 
@@ -190,8 +238,8 @@ int main(int argc, char *argv[])
 	std::string broker;
 	n.param("broker", broker , std::string("130.66.64.112"));
 
-	ros::Publisher obstacleArray_pub = n.advertise<visualization_msgs::MarkerArray>("markersArray", 1000);
-    	
+	ros::Publisher obstacleArray_pub = n.advertise<visualization_msgs::MarkerArray>("markersArray", 5);
+    
     	
     	
     	
@@ -235,7 +283,8 @@ int main(int argc, char *argv[])
 	 * This call will continue forever, carrying automatic reconnections if
 	 * necessary, until the user calls mosquitto_disconnect().
 	 */
-	
+	ros::Rate loop_rate(10);
+
 	while (ros::ok())
 	{
 		mosquitto_loop(mosq,-1,1);
