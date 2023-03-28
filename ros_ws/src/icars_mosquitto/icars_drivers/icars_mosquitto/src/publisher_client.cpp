@@ -9,19 +9,39 @@
 
 using namespace std;
 
-void chatterCallback(const std_msgs::Float32MultiArray::ConstPtr& msg)
+class Bbox_Subscriber
 {
-  float Arr[90];
-  int i = 0;
-	// print all the remaining numbers
-	for(std::vector<float>::const_iterator it = msg->data.begin(); it != msg->data.end(); ++it)
-	{
-		Arr[i] = *it;
-		i++;
-	}
-  cout<<Arr[0]<<"\n"<<endl;
+public:
+  Bbox_Subscriber(ros::NodeHandle &nh)
+  {
 
-}
+    sub_ = nh.subscribe("obstacle_list", 20, &Bbox_Subscriber::callback, this);
+  }
+  vector<vector<string> > msgs;
+private:
+  ros::Subscriber sub_;
+  
+
+  void callback(const std_msgs::Float32MultiArray::ConstPtr& msg)
+  {
+  msgs.clear();
+	for(int i=0; i<(msg->data).size();i=i+9)
+	{
+    vector<string> bbox_feat;
+    bbox_feat.reserve(9);
+    int j=0;
+    while(j<9){
+      if(j==7){bbox_feat.push_back(to_string(int(msg->data[j+i])));}
+      else{
+      bbox_feat.push_back(to_string(msg->data[j+i]));
+      }
+      j++;
+    }
+    msgs.push_back(bbox_feat);
+	}
+  }
+};
+
 
 int main(int argc, char *argv[]) 
 {
@@ -31,20 +51,6 @@ int main(int argc, char *argv[])
     std::string broker;
     n.param("broker", broker , std::string("130.66.64.112"));
     int port = 1883;
-    string agent = "RSU";
-    int nb_bb = 5;
-    string id_bb[nb_bb];
-    for(int n=1; n<nb_bb+1; n++){
-    	id_bb[n-1] = to_string(n);
-    }
-    string subtopics[] = {"cx", "cy", "cz","dx","dy","dz", "heading","class"}; 
-    string msgs1[] = {"1.0", "2.0", "0.5", "0.1","0.1","0.1", "0.5", "car"};
-    string msgs2[] = {"3.0", "4.0", "0.5", "0.1","0.1","0.1", "0.5", "car"};
-    string msgs3[] = {"1.0", "2.0", "0.5", "0.1","0.1","0.1", "0.5", "car"};
-    string msgs4[] = {"1.0", "2.0", "0.5", "0.1","0.1","0.1", "0.5", "car"};
-    string msgs5[] = {"1.0", "2.0", "0.5", "0.1","0.1","0.1", "0.5", "car"};
-    
-    
     struct mosquitto *client;
     int ret = 0;
     
@@ -62,28 +68,29 @@ int main(int argc, char *argv[])
         return(ret);        
     }
     
-    ros::Rate loop_rate(1);
-    ros::Subscriber chatter_sub = n.subscribe("obstacle_list", 1000, chatterCallback);
+    ros::Rate loop_rate(10);
+    // crée un subscriber du node de det&tracking 
+    Bbox_Subscriber subscriber(n);
     while (ros::ok())
   	{ 
-
-    
     // publie un message dans le sujet
-    string id_flag = "1";
-    string msg;
-    for(string id: id_bb){
-     printf("-------------------------------");
-    	// printf("%s \n", id.c_str());
-    	string topic_name = agent + '/' + id + '/' ;
-	    for(int idx = 0 ; idx<sizeof(msgs1)/sizeof(msgs1[0]); idx++){
-	    	
-	    	msg = msg + '/' + msgs1[idx];
-	    	printf("%s %s \n", topic_name.c_str(), msg.c_str());
-
-		  }
-    mosquitto_publish(client, NULL, topic_name.c_str(), msg.length(),msg.c_str(), 0, false); 	
-    msg = "";
-	}
+    // printf("-------------------- \n");
+    if (subscriber.msgs.size()>0){
+      for(int j=0; j<subscriber.msgs.size(); j++){
+        string msg_to_publish;
+        string topic = "RSU/" + subscriber.msgs[j][7];
+        for(int i=0; i<subscriber.msgs[j].size(); i++){
+          if(i!=7){
+          msg_to_publish = msg_to_publish + subscriber.msgs[j][i] + "/";
+          }
+        }
+        // cout<<"topic is:"<< topic <<endl;
+        // cout<<"msg is:"<< msg_to_publish <<endl;
+        mosquitto_publish(client, NULL, topic.c_str(), msg_to_publish.length(),msg_to_publish.c_str(), 0, false);
+    } 
+    }
+    // printf("--------------------");
+ 
 	ros::spinOnce();
 	loop_rate.sleep();
 	

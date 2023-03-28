@@ -9,6 +9,7 @@
 #include "visualization_msgs/MarkerArray.h"
 #include "visualization_msgs/Marker.h"
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf/transform_listener.h>
 
 /*
  * This example shows how to write a client that subscribes to a topic and does
@@ -22,11 +23,140 @@
 #include <unistd.h>
 
 using namespace std;
-
-/*icars_msgs::PathObstacle obstacle;
-icars_msgs::PathObstacleList obstaclelist;*/
 visualization_msgs::MarkerArray obstacles;
-visualization_msgs::Marker obstacle;
+
+
+class MarkerArrayModifier
+{
+public:
+  MarkerArrayModifier(string &topic, string &msg, visualization_msgs::MarkerArray &obstacles)
+  {
+	
+	
+	int id = topic_hl(topic);
+	msg_hl(id, msg, obstacles);
+	// for (auto &obstacle : obstacles.markers){
+	// 	geometry_msgs::PoseStamped pose_in;
+	// 	pose_in.header = obstacle.header;
+	// 	pose_in.pose = obstacle.pose;
+		
+	// 	// tf::poseStampedMsgToTF(geometry_msgs::PoseStamped(obstacle.header, obstacle.pose), pose_in);
+	// 	geometry_msgs::PoseStamped pose_out;
+	// 	listener.transformPose("ZOE3/os_sensor", pose_in, pose_out);
+	// 	obstacle.pose = pose_out.pose;
+	// 	obstacle.header = pose_out.header;
+	// 	cout <<pose_in << "   :  \n "<< pose_out<< endl;
+	// 	cout << "-----------------------"<< endl;
+	// }
+	
+
+
+        // Advertise the topic that provides the modified message
+  }
+
+private:
+  ros::Subscriber sub_;
+  ros::Publisher pub_;
+  tf::TransformListener listener;
+  visualization_msgs::MarkerArray modifiedMarkerArray_;
+
+  int topic_hl(string &topic){
+	stringstream ss(topic);
+  	vector<string> tokens;
+
+  	while (ss.good()) {
+		string token;
+		getline(ss, token, '/');
+		tokens.push_back(token);
+  }
+//   cout<<stoi(tokens[1])<<endl;
+  return stoi(tokens[1]);
+  }
+  
+  
+  void msg_hl(int &id, string &msg, visualization_msgs::MarkerArray &obstacles){
+	stringstream ss(msg);
+  	vector<string> tokens;
+
+  	while (ss.good()) {
+		string token;
+		getline(ss, token, '/');
+		tokens.push_back(token);
+  }
+//   listener.waitForTransform("velodyne", "ZOE3/os_sensor", ros::Time(0), ros::Duration(3.0));
+	for(auto obstacle : obstacles.markers){
+		if(id == obstacle.id){
+			obstacle.pose.position.x = stof(tokens[0]);
+			obstacle.pose.position.y = stof(tokens[1]);
+			obstacle.pose.position.z =stof(tokens[2]);
+			obstacle.scale.x = stof(tokens[3]);
+			obstacle.scale.y = stof(tokens[4]);
+			obstacle.scale.z = stof(tokens[5]);
+			tf2::Quaternion q_heading;
+			q_heading.setRPY( 0, 0, stof(tokens[6]));
+			obstacle.pose.orientation.x = q_heading.getX();
+			obstacle.pose.orientation.y = q_heading.getY();
+			obstacle.pose.orientation.z = q_heading.getZ();
+			obstacle.pose.orientation.w = q_heading.getW();
+
+			// geometry_msgs::PoseStamped pose_in;
+			// pose_in.header = obstacle.header;
+			// pose_in.pose = obstacle.pose;
+			// geometry_msgs::PoseStamped pose_out;
+			// listener.transformPose("ZOE3/os_sensor", pose_in, pose_out);
+
+			// obstacle.pose = pose_out.pose;
+			// obstacle.header = pose_out.header;
+					break;
+		}
+	
+	}
+	visualization_msgs::Marker new_obstacle;
+	new_obstacle.ns = "obstacle";
+	
+
+	new_obstacle.pose.position.x = stof(tokens[0]);
+	new_obstacle.pose.position.y = stof(tokens[1]);
+	new_obstacle.pose.position.z = stof(tokens[2]);
+	new_obstacle.scale.x = stof(tokens[3]);
+	new_obstacle.scale.y = stof(tokens[4]);
+	new_obstacle.scale.z = stof(tokens[5]);
+	tf2::Quaternion q_heading;
+	q_heading.setRPY( 0, 0, stof(tokens[6]));
+	new_obstacle.pose.orientation.x = q_heading.getX();
+	new_obstacle.pose.orientation.y = q_heading.getY();
+	new_obstacle.pose.orientation.z = q_heading.getZ();
+	new_obstacle.pose.orientation.w = q_heading.getW();
+  
+	new_obstacle.header.frame_id = "velodyne";
+	new_obstacle.type = 1;
+	if (stoi(tokens[7]) == 0){
+		new_obstacle.color.g = 0.5;
+		}
+	else  {new_obstacle.color.r = 0.5;
+	}
+	new_obstacle.color.a = 0.5;
+	new_obstacle.id = id;
+	new_obstacle.lifetime = ros::Duration(1.0);
+
+	// geometry_msgs::PoseStamped pose_in;
+	// pose_in.header = new_obstacle.header;
+	// pose_in.pose = new_obstacle.pose;
+	// geometry_msgs::PoseStamped pose_out;
+	// listener.transformPose("ZOE3/os_sensor", pose_in, pose_out);
+
+	// new_obstacle.pose = pose_out.pose;
+	// new_obstacle.header = pose_out.header;
+	obstacles.markers.clear();
+	obstacles.markers.push_back(new_obstacle);
+
+
+
+	}
+
+};
+
+
 
 /* Callback called when the client receives a CONNACK message from the broker. */
 void on_connect(struct mosquitto *mosq, void *obj, int reason_code)
@@ -50,17 +180,17 @@ void on_connect(struct mosquitto *mosq, void *obj, int reason_code)
 	 * connection drops and is automatically resumed by the client, then the
 	 * subscriptions will be recreated when the client reconnects. */
 	rcx = mosquitto_subscribe(mosq, NULL, "RSU/#", 1);
-	rcy = mosquitto_subscribe(mosq, NULL, "y_global", 1);
-	rcf = mosquitto_subscribe(mosq, NULL, "frame_id", 1);
+	// rcy = mosquitto_subscribe(mosq, NULL, "y_global", 1);
+	// rcf = mosquitto_subscribe(mosq, NULL, "frame_id", 1);
 	if(rcx != MOSQ_ERR_SUCCESS){
 		fprintf(stderr, "Error subscribing: %s\n", mosquitto_strerror(rcx));
 		/* We might as well disconnect if we were unable to subscribe */
 		mosquitto_disconnect(mosq);
-	if(rcy != MOSQ_ERR_SUCCESS){
-		fprintf(stderr, "Error subscribing: %s\n", mosquitto_strerror(rcy));
-		/* We might as well disconnect if we were unable to subscribe */
-		mosquitto_disconnect(mosq);
-		}
+	// if(rcy != MOSQ_ERR_SUCCESS){
+	// 	fprintf(stderr, "Error subscribing: %s\n", mosquitto_strerror(rcy));
+	// 	/* We might as well disconnect if we were unable to subscribe */
+	// 	mosquitto_disconnect(mosq);
+	// 	}
 	}
 }
 
@@ -95,135 +225,9 @@ void on_subscribe(struct mosquitto *mosq, void *obj, int mid, int qos_count, con
 void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg)
 {
 	/* This blindly prints the payload, but the payload can be anything so take care. */
-	printf("%s %d %s\n", msg->topic, msg->qos, (char *)msg->payload);
-	
-	/* char* topic1 = "RSU/0/x_global";
-	if(strcmp(msg->topic, topic1) == 0){
-		obstacle.x_global = atof((char *)msg->payload);
-	}
-	char* topic2 = "y_global";
-	if(strcmp(msg->topic, topic2) == 0){
-		obstacle.y_global = atof((char *)msg->payload);
-	}
-	char* topic3 = "frame_id";
-	if(strcmp(msg->topic, topic3) == 0){
-		obstacle.header.frame_id = (char *)msg->payload;
-	}
-	
-	obstaclelist.obst_list.push_back(obstacle);*/
-	// RVIZ visualization
-	
-	// ------------------------------------------Topics segmentation
-    	char *topic_ptr = strtok(msg->topic, "/");
-    	int i=0;
-    	char *agent;
-    	char *id ;
-    	char *topic_name ;
-    	while (topic_ptr != NULL)  
-    	{
-    	switch (i){
-    		case 0:
-    			agent = topic_ptr;
-    		case 1:
-    			id = topic_ptr;
-        topic_ptr = strtok (NULL, "/"); 
-        i++;
-    	}
-    	}
-    	
-    	// ------------------------------------------Msg segmentation
-    	char *msg_ptr = strtok((char *)msg->payload, "/");
-    	int j=0;
-    	float cx, cy, cz, dx, dy, dz, heading;
-    	char *classe; 
-    	char * endPtr;
-    	while (msg_ptr!= NULL)  
-    	{
-    	switch (j){
-    		case 0:
-    			cx = atof(msg_ptr);
-    			cout<<cx<<endl;
-    		case 1:
-    			cy = atof(msg_ptr);
-    		case 2:
-    			cz = atof(msg_ptr);
-    		case 3:
-    			dx = atof(msg_ptr);
-    		case 4:
-    			dy = atof(msg_ptr);
-    		case 5:
-    			dz = atof(msg_ptr);
-    		case 6:
-    			heading = atof(msg_ptr);
-    		case 7:
-    			classe = msg_ptr;
-        msg_ptr = strtok (NULL, "/"); 
-        j++;
-    	}
-    	}
-    	//printf("%.2f %.2f %.2f %.2f %.2f %.2f %.2f %s \n", cx, cy, cz, dx, dy, dz, heading, classe);
-    	visualization_msgs::Marker new_obstacle;
-    	new_obstacle.pose.position.x = cx;
-    	new_obstacle.pose.position.y = cy;
-    	new_obstacle.pose.position.z = cz;
-    	new_obstacle.scale.x = dx;
-    	new_obstacle.scale.y = dy;
-    	new_obstacle.scale.z = dz;
-    	tf2::Quaternion q_heading;
-    	q_heading.setRPY( 0, 0, heading);
-    	new_obstacle.pose.orientation.x = q_heading.getX();
-    	new_obstacle.pose.orientation.y = q_heading.getY();
-    	new_obstacle.pose.orientation.z = q_heading.getZ();
-    	new_obstacle.pose.orientation.w = q_heading.getW();
-    	//new_obstacle.pose.position.x = classe;
-    	
-    	/*for (visualization_msgs::Marker obstacle : obstacles.markers) 
-    	{
-    		if ( obstacle.id == atoi(id) ) 
-    		{
-			
-    			return;
-    		}  
-    	}*/
-    	/*for(int len_obstacle = 0; len_obstacle<obstacles.markers.size();len_obstacle++ ){
-    		printf("len of obstacles %d \n", obstacles.markers[len_obstacle].id);
-    		if(atoi(id) == obstacles.markers[len_obstacle].id){return;}
- 	}
-
- 	obstacle.ns = "my_namespace";
-	obstacle.id = atoi(id);
-    	char *topicn = "cx";
-    	if (strcmp(topic_name, topicn) == 0) {obstacle.pose.position.x = atof((char *)msg->payload);}
-    	topicn = "cy";
-    	if (strcmp(topic_name, topicn) == 0) {obstacle.pose.position.y = atof((char *)msg->payload);}
-    	topicn = "cz";
-    	if(strcmp(topic_name, topicn) == 0) {obstacle.pose.position.z = atof((char *)msg->payload); }
-    	topicn = "dx";
-    	if(strcmp(topic_name, topicn) == 0) {obstacle.scale.x = atof((char *)msg->payload); }
-    	topicn = "dy";
-    	if(strcmp(topic_name, topicn) == 0) {obstacle.scale.y = atof((char *)msg->payload); }
-    	topicn = "dz";
-    	if(strcmp(topic_name, topicn) == 0) {obstacle.scale.z = atof((char *)msg->payload);}
-    	topicn = "heading";
-    	tf2::Quaternion q_heading;
-    	if(strcmp(topic_name, topicn) == 0) {q_heading.setRPY( 0, 0, atof((char *)msg->payload));
-    	obstacle.pose.orientation.x = q_heading.getX();
-    	obstacle.pose.orientation.y = q_heading.getY();
-    	obstacle.pose.orientation.z = q_heading.getZ();
-    	obstacle.pose.orientation.w = q_heading.getW();}
-    	topicn = "class";
-    	//if(strcmp(topic_name, topicn) == 0) {obstacle.color.a = atof((char *)msg->payload); printf("enter the void");}
-    	*/
-    	new_obstacle.header.frame_id = "base_link";
-	new_obstacle.type = 1;
-	new_obstacle.color.r = 1.0;
-	new_obstacle.color.a = 1.0;
-	
-    	obstacle = new_obstacle;
-	//obstacle.action = visualization_msgs::Marker::MODIFY;
-	//visualization_msgs::Marker new_obstacle;
-	//obstacles.markers.push_back(new_obstacle);
-	
+	string topic =  msg->topic;
+	string msg_to_read = (char *)msg->payload;
+	MarkerArrayModifier modifier(topic, msg_to_read, obstacles);
 }
 
 
@@ -231,10 +235,11 @@ int main(int argc, char *argv[])
 {
 	ros::init(argc, argv, "icars_mosquitto_subscriber");
 	ros::NodeHandle n;
-    	std::string broker;
-    	n.param("broker", broker , std::string("130.66.64.112"));
-    	
-    	ros::Publisher chatter_pub = n.advertise<visualization_msgs::Marker>("pathobstacle", 1000);
+	std::string broker;
+	n.param("broker", broker , std::string("130.66.64.112"));
+
+	ros::Publisher obstacleArray_pub = n.advertise<visualization_msgs::MarkerArray>("markersArray", 5);
+    
     	
     	
     	
@@ -278,11 +283,14 @@ int main(int argc, char *argv[])
 	 * This call will continue forever, carrying automatic reconnections if
 	 * necessary, until the user calls mosquitto_disconnect().
 	 */
-	
+	ros::Rate loop_rate(10);
+
 	while (ros::ok())
 	{
 		mosquitto_loop(mosq,-1,1);
-		chatter_pub.publish(obstacle);
+		// visualization_msgs::Marker list_obstacles;
+		obstacleArray_pub.publish(obstacles);
+		// obstacle_pub.publish(obstacle);
 		ros::spinOnce();
 	}
 	mosquitto_lib_cleanup();
