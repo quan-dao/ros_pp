@@ -4,19 +4,19 @@
   <!-- launch node type 1 if node_type equals 1 -->
   <!-- <group if="$(eval arg('node_type') == '1')"> -->
 
-    <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/user/Documents/records/2023-03-23/RSU/2023-03-23-11-56-34.bag">
+    <!-- <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/user/Documents/records/2023-03-23/RSU/2023-03-23-11-56-34.bag">
         <param name="/use_sim_time" value="true"/>
-    </node>
+    </node> -->
 <!-- 
     <node pkg="rosbag" type="play" name="player_car" args="-l /home/host/Desktop/quan_ws/ros_pp/data/bags/ouster/pointcloud_16_34_19.bag">
         <param name="/use_sim_time" value="true"/>
     </node> -->
 
-    <node pkg="icars_mosquitto" name="publisher" type="icars_mosquitto_publisher" output="screen">
+    <!-- <node pkg="icars_mosquitto" name="publisher" type="icars_mosquitto_publisher" output="screen">
         
-    </node>
+    </node> -->
 
-    <node pkg="tf2_ros" name="tf_publisher" type="static_transform_publisher" args="1170 770 1.514 3.51 0 0 map ZOE3/os_sensor 10">
+    <node pkg="tf2_ros" name="tf_publisher_CAR" type="static_transform_publisher" args="1161.5 764.5 1.5 -1.57 0.0 0.0 map ZOE3/os_sensor">
         
     </node>
      <!-- </group> -->
@@ -31,14 +31,15 @@
         <param name="/use_sim_time" value="true"/>
     </node> -->
 
-    <!-- <node pkg="icars_mosquitto" name="subscriber" type="icars_mosquitto_subscriber" output="screen">
+    <node pkg="icars_mosquitto" name="subscriber" type="icars_mosquitto_subscriber" output="screen">
         
     </node>
 
-    <node pkg="tf2_ros" name="tf_publisher" type="static_transform_publisher" args="1172 759 1.714 5.13 0 0 map velodyne 10">
+
+    <node pkg="tf2_ros" name="tf_publisher_RSU" type="static_transform_publisher" args="1172.5 760 1.6 0.0 0.0 0.0 map velodyne">
         
     </node>
-     </group> -->
+    <!-- </group> -->
 
    
     
