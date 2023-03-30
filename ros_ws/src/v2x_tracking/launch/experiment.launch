@@ -3,10 +3,14 @@
         <param name="/use_sim_time" value="true"/>
     </node>
 
+    <node pkg="rosbag" type="play" name="player_car" args=" /home/host/Desktop/quan_ws/ros_pp/data/bags/2023-03-23/CAR/2023-03-23-11-56-34.bag">
+        <param name="/use_sim_time" value="true"/>
+    </node>
+
     <node pkg="rosbag" type="play" name="player_car" args="/home/user/Documents/records/2023-03-23/CAR/2023-03-23-11-56-34.bag">
         <param name="/use_sim_time" value="true"/>
     </node>
-<!-- 
+
     <node pkg="v2x_tracking" name="v2x_tracking_node" type="v2x_tracking_node.py" output="screen">
         <param name="/use_sim_time" value="true"/>
         <param name="node_name" value="rsu"/>
@@ -18,32 +22,32 @@
         <param name="detection_score_threshold" value="0.2"/>
         <param name="num_miss_to_kill" value="5"/>
 
-        <param name="frame_id" value="base_link"/>
-        <param name="tf_ouster_to_map_yaw_rad" value="5.1303"/>
+        <param name="frame_id" value="velodyne"/>
+        <param name="tf_ouster_to_map_yaw_rad" value="0.0"/>
         <param name="tf_ouster_to_map_transl_x" value="1172.5"/>
-        <param name="tf_ouster_to_map_transl_y" value="759.0"/>
-        <param name="tf_ouster_to_map_transl_z" value="1.0"/>
-    </node> -->
 
-    <!-- <node pkg="v2x_tracking" name="v2x_tracking_node_ouster" type="v2x_tracking_node.py" output="screen">
+        <param name="tf_ouster_to_map_transl_y" value="760.0"/>
+        <param name="tf_ouster_to_map_transl_z" value="1.6"/>
+    </node>
+
+    <node pkg="v2x_tracking" name="v2x_tracking_node_ouster" type="v2x_tracking_node.py">
         <param name="/use_sim_time" value="true"/>        
         <param name="node_name" value="car"/>
         
         <remap from="velodyne_points" to="ZOE3/os_cloud_node/points"/>        
         <remap from="test" to="car_tracks"/>
 
-        <param name="detect_and_track" value="False"/>
+        <param name="detect_and_track" value="True"/>
         <param name="detection_score_threshold" value="0.2"/>        
         <param name="num_miss_to_kill" value="10"/>
-        <param name="points_yaw_threshold_degree" value="30"/>
+        <param name="points_yaw_threshold_degree" value="90"/>
 
         <param name="frame_id" value="ZOE3/os_sensor"/>
-        <param name="tf_ouster_to_map_yaw_rad" value="2.0176"/>
-        <param name="tf_ouster_to_map_transl_x" value="1186.51"/>
-        <param name="tf_ouster_to_map_transl_y" value="756.045"/>
-        <param name="tf_ouster_to_map_transl_z" value="-0.00143"/>
+        <param name="tf_ouster_to_map_yaw_rad" value="-1.57"/>
+        <param name="tf_ouster_to_map_transl_x" value="1161.51"/>
+        <param name="tf_ouster_to_map_transl_y" value="764.5"/>
+        <param name="tf_ouster_to_map_transl_z" value="1.5"/>
         
-    </node> -->
-    
+    </node>    
 
 </launch>
