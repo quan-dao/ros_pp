@@ -20,11 +20,13 @@ from tools.run_det_track import Detector, Tracktor
 from functools import partial
 from typing import List
 
+
 def pub_list_obstacle(bboxes,frame_id):
     bboxes = bboxes.reshape(-1).tolist()
     array = Float32MultiArray()
     array.data = bboxes
     obstacle_publisher.publish(array)
+
 
 def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
     qx = np.sin(roll / 2) * np.cos(pitch / 2) * np.cos(yaw / 2) - np.cos(roll / 2) * np.sin(pitch / 2) * np.sin(yaw / 2)
@@ -141,7 +143,67 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
 
     pub_list_obstacle(track_result, frame)
     pub_list_obstacle(track_result,frame)
+
+
+def compute_occlusion_flag(boxes: np.ndarray, yaw_range_iou_threshold: float = 0.5) -> np.ndarray:
+    """
+    Given a set of boxes in the local coordinate of a LiDAR, find out which ones are occluded
+
+    Args:
+        boxes: (N, 7 [+ C]) - x, y, z, dx, dy, dz, yaw, [others]
     
+    Returns:
+        occlusion_flag (N,): 1 -> occluded, 0 - not occluded
+    """
+    
+    # sort boxes according to distance from their centers to LiDAR
+    dist = np.square(boxes[:, :2]).sum(axis=1)
+    sorted_idx = np.argsort(dist)
+    boxes = boxes[sorted_idx]
+    
+    # -----------------------------
+    # for each box get its yaw range
+    # -----------------------------
+    xs = np.array([1, -1, -1, 1]) / 2.0
+    ys = np.array([1, 1, -1, -1]) / 2.0
+    zs = np.array([1, 1, 1, 1]) / 2.0
+    vers = np.stack([xs, ys, zs], axis=1)  # (4, 3) - normalized coordinate of boxes' vertices 
+    boxes_vertices = boxes[:, np.newaxis, 3: 6] * vers[np.newaxis]  # (N, 4, 3) - xyz in boxes' local frame
+    # ---
+    # map boxes_vertices from local coord to LiDAR coord
+    # ---
+    cos, sin = np.cos(boxes[:, 6]), np.sin(boxes[:, 6])
+    zeros, ones = np.zeros(boxes.shape[0]), np.ones(boxes.shape[0])
+    lidar_rot_box_transpose = np.stack([
+        cos, sin, zeros,
+        -sin, cos, zeros,
+        zeros, zeros, ones
+    ], axis=1).reshape(boxes.shape[0], 3, 3)
+    boxes_vertices = np.einsum('nij, njk -> nik', boxes_vertices, lidar_rot_box_transpose) \
+        + boxes[:, np.newaxis, :3]  # (N, 4, 3) - xyz in LiDAR frame
+    boxes_yaw_range = np.arctan2(boxes_vertices[:, :, 1], boxes_vertices[:, :, 0])  # (N, 4)
+    boxes_yaw_range = np.stack([np.amin(boxes_yaw_range, axis=1), 
+                                np.amax(boxes_yaw_range, axis=1)], axis=1)  # (N, 2) - yaw_min, yaw_max
+    
+    # --------------------------------
+    # compute IoU of boxes_yaw_range
+    # --------------------------------
+    boxes_yaw_inter_min = np.maximum(boxes_yaw_range[:, np.newaxis, 0], boxes_yaw_range[np.newaxis, :, 0])  # (N, N)
+    boxes_yaw_inter_max = np.minimum(boxes_yaw_range[:, np.newaxis, 1], boxes_yaw_range[np.newaxis, :, 1])  # (N, N)
+    boxes_yaw_inter = np.clip(boxes_yaw_inter_max - boxes_yaw_inter_min, a_min=0.0)  # (N, N)
+
+    boxes_yaw = boxes_yaw_range[:, 1] - boxes_yaw_range[:, 0]  # (N,)
+    boxes_yaw_union = boxes_yaw[:, np.newaxis] + boxes_yaw[np.newaxis, :]  # (N, N)
+
+    boxes_yaw_iou = boxes_yaw_inter / boxes_yaw_union  # (N, N)
+    boxes_yaw_iou = boxes_yaw_iou > yaw_range_iou_threshold
+
+    # greedy occlusion marking -> like NMS
+    occlusion_flag = np.zeros(boxes.shape[0], dtype=bool)
+    for b_idx in range(boxes.shape[0]):
+        boxes_yaw_iou[b_idx, b_idx] = 0.0  # mark a box's IoU with itself = 0.0 -> a box doesn't occlude itself
+        occlusion_flag = np.logical_or(occlusion_flag, boxes_yaw_iou[b_idx])
+    return occlusion_flag.astype(int)
 
 
 def main():
@@ -156,6 +218,7 @@ def main():
     rospy.Subscriber("velodyne_points", PointCloud2, wrapper_lidar_cb)
     
     rospy.spin()
+
 
 if __name__ == '__main__':
     rospy.init_node('v2x_tracking_node')
