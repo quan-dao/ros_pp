@@ -1,22 +1,22 @@
 <launch>
-    <node pkg="rosbag" type="play" name="player_rsu" args="/home/user/Documents/records/2023-03-23/RSU/2023-03-23-11-56-34.bag">
+    <!-- <node pkg="rosbag" type="play" name="player_rsu" args="-l /home/host/Desktop/quan_ws/ros_pp/data/bags/2023-03-23/RSU/2023-03-23-11-56-34.bag">
         <param name="/use_sim_time" value="true"/>
-    </node>
+    </node> -->
 
-    <node pkg="rosbag" type="play" name="player_car" args=" /home/host/Desktop/quan_ws/ros_pp/data/bags/2023-03-23/CAR/2023-03-23-11-56-34.bag">
+    <!-- <node pkg="rosbag" type="play" name="player_car" args=" /home/host/Desktop/quan_ws/ros_pp/data/bags/2023-03-23/CAR/2023-03-23-11-56-34.bag">
         <param name="/use_sim_time" value="true"/>
-    </node>
+    </node> -->
 
-    <node pkg="rosbag" type="play" name="player_car" args="/home/user/Documents/records/2023-03-23/CAR/2023-03-23-11-56-34.bag">
+    <!-- <node pkg="rosbag" type="play" name="player_car" args="/home/user/Documents/records/2023-03-23/CAR/2023-03-23-11-56-34.bag">
         <param name="/use_sim_time" value="true"/>
-    </node>
+    </node> -->
 
     <node pkg="v2x_tracking" name="v2x_tracking_node" type="v2x_tracking_node.py" output="screen">
         <param name="/use_sim_time" value="true"/>
         <param name="node_name" value="rsu"/>
 
         <remap from="velodyne_points" to="velodyne_points"/>
-        <remap from="test" to="rsu_tracks"/>
+        <remap from="test" to="rsu_tracks_replay"/>
 
         <param name="detect_and_track" value="True"/>
         <param name="detection_score_threshold" value="0.2"/>
@@ -30,7 +30,7 @@
         <param name="tf_ouster_to_map_transl_z" value="1.6"/>
     </node>
 
-    <node pkg="v2x_tracking" name="v2x_tracking_node_ouster" type="v2x_tracking_node.py">
+    <!-- <node pkg="v2x_tracking" name="v2x_tracking_node_ouster" type="v2x_tracking_node.py">
         <param name="/use_sim_time" value="true"/>        
         <param name="node_name" value="car"/>
         
@@ -48,6 +48,6 @@
         <param name="tf_ouster_to_map_transl_y" value="764.5"/>
         <param name="tf_ouster_to_map_transl_z" value="1.5"/>
         
-    </node>    
+    </node>     -->
 
 </launch>
