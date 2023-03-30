@@ -1,0 +1,11 @@
+<launch>
+
+    <node pkg="icars_mosquitto" name="publisher" type="icars_mosquitto_publisher" output="screen">
+        
+    </node>
+
+
+    <!-- <node pkg="tf2_ros" name="tf_publisher_CAR" type="static_transform_publisher" args="1161.5 764.5 1.5 -1.57 0.0 0.0 map ZOE3/os_sensor">
+    </node> -->
+
+</launch>

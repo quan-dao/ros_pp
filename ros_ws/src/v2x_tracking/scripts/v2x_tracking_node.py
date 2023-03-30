@@ -38,22 +38,49 @@ def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
 
 
 def viz(boxes, frame):
+
+    print('----------------------')
+    print('boxes: ', boxes.shape)
+    print(boxes)
+    
+
     msg_array = MarkerArray()
+    msg_array.markers.clear()
+
     # self.get_logger().info('Msgs received, time=%s' % time_stamp)*
-    for box in boxes:
+    occlusion_array = compute_occlusion_flag(boxes)
+    for idx, box in enumerate(boxes):
         msg = Marker()
         msg.type = 1
+        msg.ns = "obstacle"
         msg.id = int(box[7])
         msg.header.frame_id = frame
         msg.scale.x, msg.scale.y, msg.scale.z = box[3], box[4], box[5]
         msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = box[0], box[1], box[2]
         msg.pose.orientation = euler_to_quaternion(box[6])
-        if box[-1] > 0.0:
+
+        msg_text = Marker()
+        msg_text.type = 9
+        msg_text.ns = "text"
+        msg_text.id = int(box[7])
+        msg_text.header.frame_id = frame
+        msg_text.scale.x, msg_text.scale.y, msg_text.scale.z = 1.0, 1.0, 1.0
+        msg_text.pose.position.x, msg_text.pose.position.y, msg_text.pose.position.z = box[0], box[1], box[2]
+        msg_text.pose.orientation = euler_to_quaternion(box[6])
+        msg_text.text = str(int(box[7]))
+        msg_text.color = ColorRGBA(r=1., a=1.0)
+        msg_text.lifetime = rospy.Duration(secs=0.2, nsecs=0.0)
+
+        if occlusion_array[idx] == 1:
             msg.color = ColorRGBA(r=1., a=0.5)
         else:
-            msg.color = ColorRGBA(g=1., a=0.5)
-        msg.lifetime = rospy.Duration(secs=0, nsecs=500000000)
+            msg.color = ColorRGBA(b=1., a=0.5)
+        msg.lifetime = rospy.Duration(secs=0.2, nsecs=0.0)
         msg_array.markers.append(msg)
+        msg_array.markers.append(msg_text)
+    
+    print('num markers:', len(msg_array.markers))
+    print('----------------------')
 
     return msg_array
 
@@ -142,7 +169,7 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
     pub.publish(viz(track_result, frame))
 
     pub_list_obstacle(track_result, frame)
-    pub_list_obstacle(track_result,frame)
+    # pub_list_obstacle(track_result,frame)
 
 
 def compute_occlusion_flag(boxes: np.ndarray, yaw_range_iou_threshold: float = 0.5) -> np.ndarray:
@@ -190,7 +217,7 @@ def compute_occlusion_flag(boxes: np.ndarray, yaw_range_iou_threshold: float = 0
     # --------------------------------
     boxes_yaw_inter_min = np.maximum(boxes_yaw_range[:, np.newaxis, 0], boxes_yaw_range[np.newaxis, :, 0])  # (N, N)
     boxes_yaw_inter_max = np.minimum(boxes_yaw_range[:, np.newaxis, 1], boxes_yaw_range[np.newaxis, :, 1])  # (N, N)
-    boxes_yaw_inter = np.clip(boxes_yaw_inter_max - boxes_yaw_inter_min, a_min=0.0)  # (N, N)
+    boxes_yaw_inter = np.clip(boxes_yaw_inter_max - boxes_yaw_inter_min, a_min=0.0, a_max=None)  # (N, N)
 
     boxes_yaw = boxes_yaw_range[:, 1] - boxes_yaw_range[:, 0]  # (N,)
     boxes_yaw_union = boxes_yaw[:, np.newaxis] + boxes_yaw[np.newaxis, :]  # (N, N)
@@ -236,14 +263,17 @@ if __name__ == '__main__':
     if detect_and_track:
         detector = Detector(score_threshold=detection_score_threshold)
         
+        min_hit_to_report = 5
         tracktor_ped = Tracktor(chosen_class_index=8, 
                                 cost_threshold=tracking_cost_threshold_ped, 
-                                num_miss_to_kill=num_miss_to_kill)
+                                num_miss_to_kill=num_miss_to_kill,
+                                min_hit_to_report=min_hit_to_report)
         
         tracktor_car = Tracktor(chosen_class_index=0, 
                                 cost_threshold=tracking_cost_threshold_car, 
                                 track_couters_init=10000, 
-                                num_miss_to_kill=num_miss_to_kill)
+                                num_miss_to_kill=num_miss_to_kill,
+                                min_hit_to_report=min_hit_to_report)
     else:
         detector, tracktor_ped, tracktor_car = None, None, None
     main()

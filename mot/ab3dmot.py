@@ -135,14 +135,16 @@ def spawn_new_tracks(dets: np.ndarray, P_0: np.ndarray, track_counter: int) -> T
 def build_cost_matrix(tracks_obs: np.ndarray, tracks_S: np.ndarray, dets: np.ndarray) -> np.ndarray:
     """
     Args:
-        tracks_obs: (N, 7)
+        tracks_obs: (N, 7) ) - x, y, z, dx, dy, dz, yaw
         tracks_S: (N, 7, 7) - covariance of obs
         dets: (M, 7)
     """
-    diff = dets[:, np.newaxis, :] - tracks_obs[np.newaxis, :, :]  # (M, N, 7)
+    diff = dets[:, np.newaxis, :-1] - tracks_obs[np.newaxis, :, :-1]  # (M, N, 7)
+    invS = np.linalg.inv(tracks_S)
+    invS = invS[:, :-1, :-1]
     cost = np.einsum('mnoc, mnck, mnkp -> mnop',
                       diff[:, :, np.newaxis, :], 
-                      np.linalg.inv(tracks_S)[np.newaxis], 
+                      invS[np.newaxis], 
                       diff[:, :, :, np.newaxis])[:, :, 0, 0]
     return cost
 

@@ -7,7 +7,7 @@ project(icars_mosquitto)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs tf)
+find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs tf message_generation)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -25,11 +25,10 @@ find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs tf)
 
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  Status.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -46,10 +45,10 @@ find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs tf)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs  # Or other packages containing msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  std_msgs  # Or other packages containing msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -83,7 +82,7 @@ find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs tf)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES icars_mosquitto
-  CATKIN_DEPENDS roscpp visualization_msgs std_msgs
+  CATKIN_DEPENDS roscpp visualization_msgs std_msgs message_runtime
   #DEPENDS mosquitto
 )
 
@@ -111,6 +110,13 @@ add_executable(icars_mosquitto_subscriber src/subscriber_client.cpp)
 add_dependencies(icars_mosquitto_subscriber ${catkin_EXPORTED_TARGETS})
 ## Specify libraries to link a library or executable target against
 target_link_libraries(icars_mosquitto_subscriber ${catkin_LIBRARIES} ${tf_LIBRARIES} mosquitto)
+
+## Declare a cpp executable
+add_executable(icars_mosquitto_tf src/transform_broadcaster.cpp)
+
+add_dependencies(icars_mosquitto_subscriber ${catkin_EXPORTED_TARGETS})
+## Specify libraries to link a library or executable target against
+target_link_libraries(icars_mosquitto_tf ${catkin_LIBRARIES} ${tf_LIBRARIES})
 
 #############
 ## Install ##
@@ -148,11 +154,11 @@ target_link_libraries(icars_mosquitto_subscriber ${catkin_LIBRARIES} ${tf_LIBRAR
 # )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-#   # myfile1
-#   # myfile2
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
+install(FILES
+  launch/experiment.launch
+  # myfile2
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 #############
 ## Testing ##
