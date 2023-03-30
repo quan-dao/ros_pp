@@ -149,6 +149,8 @@ private:
 	// new_obstacle.header = pose_out.header;
 	obstacles.markers.clear();
 	obstacles.markers.push_back(new_obstacle);
+	// printf("add new obstacle \n");
+	// printf("------------------ \n");
 
 
 
@@ -225,6 +227,7 @@ void on_subscribe(struct mosquitto *mosq, void *obj, int mid, int qos_count, con
 void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg)
 {
 	/* This blindly prints the payload, but the payload can be anything so take care. */
+	// printf("got msg");
 	string topic =  msg->topic;
 	string msg_to_read = (char *)msg->payload;
 	MarkerArrayModifier modifier(topic, msg_to_read, obstacles);
@@ -290,6 +293,7 @@ int main(int argc, char *argv[])
 		mosquitto_loop(mosq,-1,1);
 		// visualization_msgs::Marker list_obstacles;
 		obstacleArray_pub.publish(obstacles);
+		// printf("publish obstacle \n");
 		// obstacle_pub.publish(obstacle);
 		ros::spinOnce();
 	}
