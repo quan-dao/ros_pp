@@ -38,7 +38,15 @@ def euler_to_quaternion(yaw, pitch=0.0, roll=0.0):
 
 
 def viz(boxes, frame):
+
+    print('----------------------')
+    print('boxes: ', boxes.shape)
+    print(boxes)
+    
+
     msg_array = MarkerArray()
+    msg_array.markers.clear()
+
     # self.get_logger().info('Msgs received, time=%s' % time_stamp)*
     occlusion_array = compute_occlusion_flag(boxes)
     for idx, box in enumerate(boxes):
@@ -66,10 +74,13 @@ def viz(boxes, frame):
         if occlusion_array[idx] == 1:
             msg.color = ColorRGBA(r=1., a=0.5)
         else:
-            msg.color = ColorRGBA(g=1., a=0.5)
+            msg.color = ColorRGBA(b=1., a=0.5)
         msg.lifetime = rospy.Duration(secs=0.2, nsecs=0.0)
         msg_array.markers.append(msg)
         msg_array.markers.append(msg_text)
+    
+    print('num markers:', len(msg_array.markers))
+    print('----------------------')
 
     return msg_array
 
@@ -158,7 +169,7 @@ def LIDAR_cb(msg, points_yaw_threshold_degree: float = None, points_depth_thresh
     pub.publish(viz(track_result, frame))
 
     pub_list_obstacle(track_result, frame)
-    pub_list_obstacle(track_result,frame)
+    # pub_list_obstacle(track_result,frame)
 
 
 def compute_occlusion_flag(boxes: np.ndarray, yaw_range_iou_threshold: float = 0.5) -> np.ndarray:
@@ -252,14 +263,17 @@ if __name__ == '__main__':
     if detect_and_track:
         detector = Detector(score_threshold=detection_score_threshold)
         
+        min_hit_to_report = 5
         tracktor_ped = Tracktor(chosen_class_index=8, 
                                 cost_threshold=tracking_cost_threshold_ped, 
-                                num_miss_to_kill=num_miss_to_kill)
+                                num_miss_to_kill=num_miss_to_kill,
+                                min_hit_to_report=min_hit_to_report)
         
         tracktor_car = Tracktor(chosen_class_index=0, 
                                 cost_threshold=tracking_cost_threshold_car, 
                                 track_couters_init=10000, 
-                                num_miss_to_kill=num_miss_to_kill)
+                                num_miss_to_kill=num_miss_to_kill,
+                                min_hit_to_report=min_hit_to_report)
     else:
         detector, tracktor_ped, tracktor_car = None, None, None
     main()
