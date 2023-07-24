@@ -87,6 +87,30 @@ def batch_kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, Q:
     return tracks, tracks_P
 
 
+def kf_predict(tracks: np.ndarray, tracks_P: np.ndarray, F: np.ndarray, Q: np.ndarray) -> Tuple[np.ndarray]:
+    """
+    Prediction step of a linear KF
+        x_new = F @ x                   (1)
+        P_new = F @ P @ F.T + Q         (2)
+
+
+    Args:
+        tracks: (N, 11 + 3) - state (11), info (3)
+        tracks_P: (N, 11, 11) - tracks' covariance matrix
+        F: (11, 11) - transition matrix
+        Q: (11, 11) - noise of transition matrix
+
+    Returns:
+        tracks: (N, 11 + 3) with state changed according to (1)
+        tracks_P: (N, 11, 11) according to (2)
+    """
+    for i in range(tracks.shape[0]):
+        tracks[i, :11] = tracks[i, :11] @ F.T
+        tracks_P[i] = F @ tracks_P[i] @ F.T + Q
+    tracks_P = np.einsum('ij, bjk, kh -> bih', F, tracks_P, F.T) + Q
+    return tracks, tracks_P
+
+
 def batch_kf_predict_measurement(tracks: np.ndarray, tracks_P: np.ndarray, H: np.ndarray, R: np.ndarray, num_observable_states: int = 7) -> np.ndarray:
     """
     Computed predicted measurement according to linear measurement model

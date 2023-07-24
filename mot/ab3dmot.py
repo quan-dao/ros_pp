@@ -132,20 +132,45 @@ def spawn_new_tracks(dets: np.ndarray, P_0: np.ndarray, track_counter: int) -> T
     return tracks, tracks_P, track_counter
 
 
-def build_cost_matrix(tracks_obs: np.ndarray, tracks_S: np.ndarray, dets: np.ndarray) -> np.ndarray:
+def vectorized_build_cost_matrix(tracks_obs: np.ndarray, 
+                                 tracks_S: np.ndarray, 
+                                 dets: np.ndarray) -> np.ndarray:
     """
     Args:
         tracks_obs: (N, 7) ) - x, y, z, dx, dy, dz, yaw
         tracks_S: (N, 7, 7) - covariance of obs
         dets: (M, 7)
+    Returns:
+        cost: (M, N)
     """
-    diff = dets[:, np.newaxis, :-1] - tracks_obs[np.newaxis, :, :-1]  # (M, N, 7)
+    diff = dets[:, np.newaxis] - tracks_obs[np.newaxis, :]  # (M, N, 7)
     invS = np.linalg.inv(tracks_S)
-    invS = invS[:, :-1, :-1]
     cost = np.einsum('mnoc, mnck, mnkp -> mnop',
                       diff[:, :, np.newaxis, :], 
                       invS[np.newaxis], 
                       diff[:, :, :, np.newaxis])[:, :, 0, 0]
+    return cost
+
+
+def build_cost_matrix(tracks_obs: np.ndarray, 
+                      tracks_S: np.ndarray, 
+                      dets: np.ndarray) -> np.ndarray:
+    """
+    Args:
+        tracks_obs: (N, 7) ) - x, y, z, dx, dy, dz, yaw
+        tracks_S: (N, 7, 7) - covariance of obs
+        dets: (M, 7)
+    Returns:
+        cost: (M, N)
+    """
+    cost = np.zeros((dets.shape[0], tracks_obs.shape[0]))
+    for d_idx in range(dets.shape[0]):
+        for t_idx in range(tracks_obs.shape[0]):
+            diff = dets[d_idx] - tracks_obs[t_idx]
+            inv_S = np.linalg.inv(tracks_S[t_idx])
+            cost_ = diff.reshape(1, -1) @ inv_S @ diff.reshape(-1, 1)  # (1, 1)
+            cost[d_idx, t_idx] = cost_[0, 0]
+            
     return cost
 
 
