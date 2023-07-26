@@ -7,6 +7,9 @@ class HeightCompression(nn.Module):
         super().__init__()
         self.model_cfg = model_cfg
         self.num_bev_features = self.model_cfg.NUM_BEV_FEATURES
+    
+    def get_output_feature_dim(self):
+        return self.num_bev_features
 
     def forward(self, encoded_spconv_tensor):
         """

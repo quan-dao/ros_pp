@@ -77,6 +77,9 @@ class BaseBEVBackbone(nn.Module):
             ))
 
         self.num_bev_features = c_in
+    
+    def get_output_feature_dim(self):
+        return self.num_bev_features
 
     def forward(self, spatial_features: torch.Tensor):
         """
