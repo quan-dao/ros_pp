@@ -72,18 +72,25 @@ def make_test_batch():
 def main():
     logger = create_logger('artifact/blah.txt')
     second = CenterPoint()
+
+    print('---')
+    print(second)
+    print('---')
+
     second.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth', logger=logger)
+    second.eval()
+    second.cuda()
 
     with open('artifact/one_nuscenes_point_cloud.pkl', 'rb') as f:
         data = pickle.load(f)
 
     # pad points with time
-    points = data['points']
+    points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
     print(f"poitns: {points.shape}")
 
     pred_boxes = second(points)
-
-
+    data_out = {'points': points, 'pred_boxes': pred_boxes}
+    torch.save(data_out, 'artifact/data_out.pth')
 
 
 if __name__ == '__main__':
