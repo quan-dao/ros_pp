@@ -20,6 +20,11 @@ model_cfg = edict({
 
     'VFE':{
         'NAME': 'MeanVFE',
+        'VOXEL_SIZE': data_cfg.VOXEL_SIZE,
+        'POINT_CLOUD_RANGE': data_cfg.POINT_CLOUD_RANGE,
+        'NUM_POINT_FEATURES': data_cfg.NUM_POINT_FEATURES,
+        'MAX_NUM_POINTS_PER_VOXEL': 10,
+        'MAX_NUM_VOXELS': 60000,
     },
 
     'BACKBONE_3D': {

@@ -1,5 +1,8 @@
 import numpy as np
 import torch
+import pickle
+
+from common_utils import create_logger
 
 from cfgs.nuscenes_models.cbgs_voxel01_res3d_centerpoint import data_cfg, model_cfg
 from ros_pp.models.backbones_3d.vfe import MeanVFE
@@ -67,8 +70,20 @@ def make_test_batch():
 
 
 def main():
+    logger = create_logger('artifact/blah.txt')
     second = CenterPoint()
-    second.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth')
+    second.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth', logger=logger)
+
+    with open('artifact/one_nuscenes_point_cloud.pkl', 'rb') as f:
+        data = pickle.load(f)
+
+    # pad points with time
+    points = data['points']
+    print(f"poitns: {points.shape}")
+
+    pred_boxes = second(points)
+
+
 
 
 if __name__ == '__main__':

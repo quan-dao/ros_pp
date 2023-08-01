@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from spconv.pytorch.utils import PointToVoxel
 
@@ -12,6 +13,7 @@ class VFETemplate(nn.Module):
             num_point_features=model_cfg.NUM_POINT_FEATURES,
             max_num_points_per_voxel=model_cfg.MAX_NUM_POINTS_PER_VOXEL,
             max_num_voxels=model_cfg.MAX_NUM_VOXELS,
+            device=torch.device("cuda:0")
         )
     
     def get_output_feature_dim(self):
