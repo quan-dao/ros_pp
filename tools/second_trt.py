@@ -1,7 +1,10 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 import pickle
-from torch2trt import torch2trt
+from typing import List
+from easydict import EasyDict 
+import argparse
 
 from common_utils import create_logger
 
@@ -11,7 +14,7 @@ from ros_pp.models.backbones_3d import VoxelResBackBone8x
 from ros_pp.models.backbones_2d import HeightCompression, BaseBEVBackbone
 from ros_pp.models.dense_heads import CenterHead
 from ros_pp.models.detectors import Detector3DTemplate
-from o3d_visualization import PointsPainter
+from ros_pp.model_utils.centernet_utils import _transpose_and_gather_feat, _topk, nms_axis_aligned
 
 
 class CenterPoint_Part3D(Detector3DTemplate):
@@ -69,7 +72,137 @@ class CenterPoint_Part2D(Detector3DTemplate):
         return pred_boxes
 
 
-def main():
+def decode_bbox_from_heatmap(heatmap: torch.Tensor, 
+                             center: torch.Tensor, 
+                             center_z: torch.Tensor, 
+                             dim: torch.Tensor,
+                             rot: torch.Tensor,
+                             feature_map_stride: int,
+                             voxel_size: List[float],
+                             point_cloud_range: List[float],
+                             post_center_limit_range: torch.Tensor,
+                             max_obj_per_sample: int,
+                             score_thresh: float,
+                             batch_size: int = 1) -> List[List[torch.Tensor]]:
+        K = max_obj_per_sample
+
+        scores, inds, class_ids, ys, xs = _topk(heatmap, K=K)
+        center = _transpose_and_gather_feat(center, inds).view(batch_size, K, 2)
+        rot = _transpose_and_gather_feat(rot, inds).view(batch_size, K, 2)
+        center_z = _transpose_and_gather_feat(center_z, inds).view(batch_size, K, 1)
+        dim = _transpose_and_gather_feat(dim, inds).view(batch_size, K, 3)
+
+        angle = torch.atan(rot[..., 1] / rot[..., 0]).unsqueeze(-1)  # (batch_size, K, 1)
+
+        # get center coord on feature map (pixel coord)
+        xs = xs.view(batch_size, K, 1) + center[..., [0]]  # (batch_size, K, 1)
+        ys = ys.view(batch_size, K, 1) + center[..., [1]]  # (batch_size, K, 1)
+
+        # get center coord in 3D
+        xs = xs * feature_map_stride * voxel_size[0] + point_cloud_range[0]
+        ys = ys * feature_map_stride * voxel_size[1] + point_cloud_range[1]
+
+        # get size in 3D
+        dim = torch.exp(dim)
+
+        final_box_preds = torch.cat(([xs, ys, center_z, dim, angle]), dim=-1)  # (batch_size, K, 7)
+        final_scores = scores.view(batch_size, K)
+        final_class_ids = class_ids.view(batch_size, K)
+
+        # filter boxes outside range
+        mask = torch.logical_and((final_box_preds[..., :3] >= post_center_limit_range[:3]).all(2), 
+                                 (final_box_preds[..., :3] <= post_center_limit_range[3:]).all(2))  # (batch_size, K)
+        # filter low confident boxes
+        mask = torch.logical_and(mask, final_scores > score_thresh)  # (batch_size, K)
+
+        batch_pred = list()
+        for b_idx in range(batch_size):
+            current_pred = [
+                final_box_preds[b_idx, mask[b_idx]],  # (N, 7)
+                final_scores[b_idx, mask[b_idx]],  # (N,)
+                final_class_ids[b_idx, mask[b_idx]]  # (N,)
+            ]
+            batch_pred.append(current_pred)
+
+        return batch_pred
+
+
+def generate_predicted_boxes(heads_hm: List[torch.Tensor], 
+                             heads_center: List[torch.Tensor], 
+                             heads_center_z: List[torch.Tensor],
+                             heads_dim: List[torch.Tensor],
+                             heads_rot: List[torch.Tensor],
+                             feature_map_stride: int,
+                             voxel_size: List[float],
+                             point_cloud_range: List[float],
+                             post_proc_cfg: EasyDict,
+                             heads_cls_idx: List[torch.Tensor],
+                             batch_size: int = 1) -> List[List[torch.Tensor]]:
+    """
+    Args:
+        heads_hm: List[(B, n_cls_of_this_head, H, W)] 
+        heads_center: List[(B, 2, H, W)]
+        heads_center_z: List[(B, 1, H, W)]
+        heads_dim: List[(B, 3, H, W)]
+        heads_rot: List[(B, 2, H, W)]
+
+    Returns:
+        batch_boxes: (N, 10) - x, y, z, dx, dy, dz, yaw || score, labels || batch_idx
+    """
+    def sigmoid(x: torch.Tensor):
+        y = torch.clamp(x.sigmoid(), min=1e-4, max=1 - 1e-4)
+        return y
+    
+    num_heads = len(heads_cls_idx)
+
+    batch_boxes = []   # (N, 10) - x, y, z, dx, dy, dz, yaw || score, labels || batch_idx
+
+    for head_idx in range(num_heads):
+        batch_hm = sigmoid(heads_hm[head_idx])  # (B, N_cls, H, W)
+        
+        # find local peak in 3x3 region to replace NMS
+        batch_hm_peak = F.max_pool2d(batch_hm, kernel_size=3, stride=1, padding=1)
+        batch_hm_peak_mask = torch.absolute(batch_hm - batch_hm_peak) < 1e-8
+        batch_hm = batch_hm * batch_hm_peak_mask.float()
+
+        batch_center = heads_center[head_idx]
+        batch_center_z = heads_center_z[head_idx]
+        batch_dim = heads_dim[head_idx]
+        batch_rot = heads_rot[head_idx]
+
+        this_head_pred = decode_bbox_from_heatmap(batch_hm, batch_center, batch_center_z, batch_dim, batch_rot,
+                                                  feature_map_stride, voxel_size, point_cloud_range, 
+                                                  torch.tensor(post_proc_cfg.POST_CENTER_LIMIT_RANGE).cuda().float(),
+                                                  post_proc_cfg.MAX_OBJ_PER_SAMPLE,
+                                                  post_proc_cfg.SCORE_THRESH,
+                                                  batch_size)
+        # this_head_pred: List[List[torch.Tensor, torch.Tensor, torch.Tensor]] - len == batch_size
+
+        # axis-aligned NMS instead of BEV NMS for speed
+        for batch_idx in range(batch_size):
+            boxes, scores, labels = nms_axis_aligned(*this_head_pred[batch_idx], 
+                                                     post_proc_cfg.nms_iou_thresh, 
+                                                     post_proc_cfg.nms_pre_max_size, 
+                                                     post_proc_cfg.nms_post_max_size)
+            
+            pred_boxes = torch.cat([boxes,  # (N, 7) - x, y, z, dx, dy, dz, yaw 
+                                    scores.unsqueeze(1),  # (N, 1) 
+                                    heads_cls_idx[head_idx][labels.long()].unsqueeze(1),  # (N, 1) - class index
+                                    boxes.new_zeros(boxes.shape[0], 1) + batch_idx],  # (N, 1) - batch_idx 
+                                    dim=1)
+
+            # store this_head 's prediction to final output
+            batch_boxes.append(pred_boxes)
+    
+    batch_boxes = torch.cat(batch_boxes)
+    
+    return batch_boxes
+
+
+def make_trt():
+    from torch2trt import torch2trt
+
+
     logger = create_logger('artifact/blah.txt')
     part3d = CenterPoint_Part3D()
     part3d.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth', logger=logger)
@@ -98,8 +231,57 @@ def main():
     print('artifacts/second_part2d_trt.pth')
 
 
+def inference():
+    from torch2trt import TRTModule
+
+
+    logger = create_logger('artifact/blah.txt')
+    part3d = CenterPoint_Part3D()
+    part3d.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth', logger=logger)
+    part3d.eval()
+    part3d.cuda()
+
+    part2d_trt = TRTModule()
+    part2d_trt.load_state_dict(torch.load('artifacts/second_part2d_trt.pth'))
+
+    # ------ inference param
+    heads_cls_idx = [
+        torch.tensor([0]).long().cuda(),
+        torch.tensor([1, 2]).long().cuda(),
+        torch.tensor([3, 4]).long().cuda(),
+        torch.tensor([5]).long().cuda(),
+        torch.tensor([6, 7]).long().cuda(),
+        torch.tensor([8, 9]).long().cuda(),
+    ]
+
+
+
+    # ----- dummy input
+    with open('artifact/one_nuscenes_point_cloud.pkl', 'rb') as f:
+        data = pickle.load(f)
+        # pad points with time
+        points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
+        print(f"poitns: {points.shape}")
+
+    # ----- forward
+    spatial_features = part3d(points)
+    heads_hm, heads_center, heads_center_z, heads_dim, heads_rot = part2d_trt(spatial_features)
+    batch_boxes = generate_predicted_boxes(heads_hm, heads_center, heads_center_z, heads_dim, heads_rot,
+                                           feature_map_stride=model_cfg.DENSE_HEAD.FEATURE_MAP_STRIDE,
+                                           voxel_size=data_cfg.VOXEL_SIZE,
+                                           point_cloud_range=data_cfg.POINT_CLOUD_RANGE,
+                                           post_proc_cfg=model_cfg.DENSE_HEAD.POST_PROCESSING, 
+                                           heads_cls_idx=heads_cls_idx)
+
+
 if __name__ == '__main__':
-    main()
-
-
+    parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument('--make_trt', type=int, default=0)
+    parser.add_argument('--inference', type=int, default=0)
+    args = parser.parse_args()
+    
+    if args.make_trt == 1:
+        make_trt()
+    elif args.inference == 1:
+        inference()
 
