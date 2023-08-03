@@ -24,6 +24,7 @@ class MeanVFE(VFETemplate):
         assert len(voxel_features.shape) == 3, f"{voxel_features.shape} != (num_vox, num_points_per_vox, C)"
         
         assert voxel_coords.shape[1] == 3, f"{voxel_coords.shape[1]} != 3"
+        # add batch_idx to voxel
         padded_voxel_coords = voxel_coords.new_zeros(voxel_coords.shape[0], 4)
         padded_voxel_coords[:, 1:] = voxel_coords
 
