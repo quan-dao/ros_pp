@@ -1,7 +1,9 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_scatter
+from .vfe_template import VFETemplate
 
 
 class PFNLayerV2(nn.Module):
@@ -131,7 +133,90 @@ class DynamicPillarVFE(nn.Module):
                                    unq_coords % self.scale_y,
                                    torch.zeros(unq_coords.shape[0]).to(unq_coords.device).int()
                                    ), dim=1)
-        voxel_coords = voxel_coords[:, [0, 3, 2, 1]]
+        voxel_coords = voxel_coords[:, [0, 3, 2, 1]]  # batch, grid_z, grid_y, grid_x
         return voxel_coords, features
+
+
+class PseudoDynamicPillarVFE(VFETemplate):
+    def __init__(self, model_cfg, num_point_features, **kwargs):
+        super().__init__(model_cfg)
+        # enable overwriting num_point_features from config file
+        if model_cfg.get('NUM_RAW_POINT_FEATURES', None) is not None:
+            num_point_features = model_cfg.NUM_RAW_POINT_FEATURES
+        # ---
+        self.num_raw_point_features = num_point_features
+        self.use_norm = model_cfg.USE_NORM
+        self.with_distance = model_cfg.WITH_DISTANCE
+        self.use_absolute_xyz = model_cfg.USE_ABSOLUTE_XYZ
+        num_point_features += 6 if self.use_absolute_xyz else 3
+        if self.with_distance:
+            num_point_features += 1
+
+        self.num_filters = model_cfg.NUM_FILTERS
+        assert len(self.num_filters) > 0
+        num_filters = [num_point_features] + list(self.num_filters)
+
+        pfn_layers = []
+        for i in range(len(num_filters) - 1):
+            in_filters = num_filters[i]
+            out_filters = num_filters[i + 1]
+            pfn_layers.append(
+                PFNLayerV2(in_filters, out_filters, self.use_norm, last_layer=(i >= len(num_filters) - 2))
+            )
+        self.pfn_layers = nn.ModuleList(pfn_layers)
+    
+    def get_output_feature_dim(self):
+        return self.num_filters[-1]
+    
+    def get_paddings_indicator(self, actual_num, max_num, axis=0):
+        actual_num = torch.unsqueeze(actual_num, axis + 1)
+        max_num_shape = [1] * len(actual_num.shape)
+        max_num_shape[axis + 1] = -1
+        max_num = torch.arange(max_num, dtype=torch.int, device=actual_num.device).view(max_num_shape)
+        paddings_indicator = actual_num.int() > max_num
+        return paddings_indicator
+    
+    def forward(self, points: np.ndarray):
+        """
+        Args:
+            points: (N, 3 + C)
+
+        Returns:
+            voxel_features: (V, C)
+            voxel_coords: (V, 3)
+        """
+        voxel_features, _coords, voxel_num_points = self._voxel_generator(points)
+        # add batch_idx to voxel
+        coords = _coords.new_zeros(_coords.shape[0], 4)
+        coords[:, 1:] = _coords
+
+
+        points_mean = voxel_features[:, :, :3].sum(dim=1, keepdim=True) / voxel_num_points.type_as(voxel_features).view(-1, 1, 1)
+        f_cluster = voxel_features[:, :, :3] - points_mean
+
+        f_center = torch.zeros_like(voxel_features[:, :, :3])
+        f_center[:, :, 0] = voxel_features[:, :, 0] - (coords[:, 3].to(voxel_features.dtype).unsqueeze(1) * self.voxel_x + self.x_offset)
+        f_center[:, :, 1] = voxel_features[:, :, 1] - (coords[:, 2].to(voxel_features.dtype).unsqueeze(1) * self.voxel_y + self.y_offset)
+        f_center[:, :, 2] = voxel_features[:, :, 2] - (coords[:, 1].to(voxel_features.dtype).unsqueeze(1) * self.voxel_z + self.z_offset)
+
+        if self.use_absolute_xyz:
+            features = [voxel_features, f_cluster, f_center]
+        else:
+            features = [voxel_features[..., 3:], f_cluster, f_center]
+
+        if self.with_distance:
+            points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
+            features.append(points_dist)
+        features = torch.cat(features, dim=-1)
+
+        voxel_count = features.shape[1]
+        mask = self.get_paddings_indicator(voxel_num_points, voxel_count, axis=0)
+        mask = torch.unsqueeze(mask, -1).type_as(voxel_features)
+        features *= mask
+        for pfn in self.pfn_layers:
+            features = pfn(features)
+        features = features.squeeze()
+
+        return coords, features
 
         

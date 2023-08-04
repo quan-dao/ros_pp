@@ -6,7 +6,7 @@ import time
 
 from ros_pp.models.detectors import Detector3DTemplate
 from cfgs.nuscenes_models.cbgs_dyn_pp_centerpoint import model_cfg, data_cfg
-from ros_pp.models.backbones_3d.vfe.dynamic_pillar_vfe import DynamicPillarVFE
+from ros_pp.models.backbones_3d.vfe.dynamic_pillar_vfe import DynamicPillarVFE, PseudoDynamicPillarVFE
 from ros_pp.models.backbones_2d.map_to_bev.pointpillar_scatter import PointPillarScatter
 from ros_pp.models.backbones_2d.base_bev_backbone import BaseBEVBackbone
 from ros_pp.models.dense_heads.center_head import CenterHead
@@ -27,7 +27,7 @@ grid_size = np.floor((point_cloud_range[3:] - point_cloud_range[:3]) / voxel_siz
 class PointPillar_Part3D(Detector3DTemplate):
     def __init__(self):
         super().__init__()
-        self.vfe = DynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES, voxel_size, grid_size, point_cloud_range)
+        self.vfe = PseudoDynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES)
         self.map_to_bev_module = PointPillarScatter(model_cfg.MAP_TO_BEV, grid_size)
 
     def forward(self, points: torch.Tensor):
