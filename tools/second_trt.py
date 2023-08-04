@@ -200,7 +200,7 @@ def generate_predicted_boxes(heads_hm: List[torch.Tensor],
     return batch_boxes
 
 
-def make_trt():
+def make_trt(half_precision: bool = False):
     from torch2trt import torch2trt
 
 
@@ -226,13 +226,19 @@ def make_trt():
     spatial_features = part3d(points)
 
     # convert to TensorRT feeding sample data as input
-    part2d_trt = torch2trt(part2d, [spatial_features])
+    if not half_precision:
+        part2d_trt = torch2trt(part2d, [spatial_features])
+    else:
+        part2d_trt = torch2trt(part2d, [spatial_features.half()], fp16_mode=True)
 
-    torch.save(part2d_trt.state_dict(), 'artifacts/second_part2d_trt.pth')
+    if not half_precision:
+        torch.save(part2d_trt.state_dict(), 'artifacts/second_part2d_trt.pth')
+    else:
+        torch.save(part2d_trt.state_dict(), 'artifacts/second_part2d_trt_fp16.pth')
     print('artifacts/second_part2d_trt.pth')
 
 
-def inference():
+def inference(half_precision: bool = False):
     from torch2trt import TRTModule
 
 
@@ -243,7 +249,10 @@ def inference():
     part3d.cuda()
 
     part2d_trt = TRTModule()
-    part2d_trt.load_state_dict(torch.load('artifacts/second_part2d_trt.pth'))
+    if not half_precision:
+        part2d_trt.load_state_dict(torch.load('artifacts/second_part2d_trt.pth'))
+    else:
+        part2d_trt.load_state_dict(torch.load('artifacts/second_part2d_trt_fp16.pth'))
 
     # ------ inference param
     heads_cls_idx = [
@@ -264,10 +273,12 @@ def inference():
         points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
         print(f"poitns: {points.shape}")
 
-    for _ in range(5):
+    for _ in range(30):
         start = time.time()
         # ----- forward
         spatial_features = part3d(points)
+        if half_precision:
+            spatial_features = spatial_features.half()
         heads_hm, heads_center, heads_center_z, heads_dim, heads_rot = part2d_trt(spatial_features)
         batch_boxes = generate_predicted_boxes(heads_hm, heads_center, heads_center_z, heads_dim, heads_rot,
                                             feature_map_stride=model_cfg.DENSE_HEAD.FEATURE_MAP_STRIDE,
@@ -279,17 +290,18 @@ def inference():
         print('exec time: ', end - start)
     
     data_out = {'points': points, 'pred_boxes': batch_boxes}
-    torch.save(data_out, 'artifact/data_out_trt.pth')
+    torch.save(data_out, f'artifact/data_out_trt_half{int(half_precision)}.pth')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--make_trt', type=int, default=0)
+    parser.add_argument('--half_precision', type=int, default=0)
     parser.add_argument('--inference', type=int, default=0)
     args = parser.parse_args()
     
     if args.make_trt == 1:
-        make_trt()
+        make_trt(args.half_precision==1)
     elif args.inference == 1:
-        inference()
+        inference(args.half_precision==1)
 
