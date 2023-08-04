@@ -27,7 +27,7 @@ grid_size = np.floor((point_cloud_range[3:] - point_cloud_range[:3]) / voxel_siz
 class PointPillar_Part3D(Detector3DTemplate):
     def __init__(self):
         super().__init__()
-        self.vfe = PseudoDynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES)
+        self.vfe = PseudoDynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES, voxel_size, point_cloud_range)
         self.map_to_bev_module = PointPillarScatter(model_cfg.MAP_TO_BEV, grid_size)
 
     def forward(self, points: torch.Tensor):

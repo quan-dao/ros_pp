@@ -138,7 +138,7 @@ class DynamicPillarVFE(nn.Module):
 
 
 class PseudoDynamicPillarVFE(VFETemplate):
-    def __init__(self, model_cfg, num_point_features, **kwargs):
+    def __init__(self, model_cfg, num_point_features, voxel_size, point_cloud_range, **kwargs):
         super().__init__(model_cfg)
         # enable overwriting num_point_features from config file
         if model_cfg.get('NUM_RAW_POINT_FEATURES', None) is not None:
@@ -164,6 +164,13 @@ class PseudoDynamicPillarVFE(VFETemplate):
                 PFNLayerV2(in_filters, out_filters, self.use_norm, last_layer=(i >= len(num_filters) - 2))
             )
         self.pfn_layers = nn.ModuleList(pfn_layers)
+
+        self.voxel_x = voxel_size[0]
+        self.voxel_y = voxel_size[1]
+        self.voxel_z = voxel_size[2]
+        self.x_offset = self.voxel_x / 2 + point_cloud_range[0]
+        self.y_offset = self.voxel_y / 2 + point_cloud_range[1]
+        self.z_offset = self.voxel_z / 2 + point_cloud_range[2]
     
     def get_output_feature_dim(self):
         return self.num_filters[-1]
