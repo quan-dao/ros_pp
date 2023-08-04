@@ -70,8 +70,8 @@ def make_trt():
 
     with open('artifacts/one_nuscenes_point_cloud.pkl', 'rb') as f:
         data = pickle.load(f)
-        # pad points with time
-        points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
+        # pad points with batch_idx & time
+        points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (1, 1)], constant_values=0)).float().cuda()
 
     part2d = PointPillar_Part2D()
     part2d.load_params_from_file(path_pretrained_weights, logger=logger)
@@ -111,8 +111,8 @@ def inference():
     for idx_frame in range(10):
         with open(f'artifacts/frame{idx_frame}_nuscenes_point_cloud.pkl', 'rb') as f:
             data = pickle.load(f)
-            # pad points with time
-            points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
+            # pad points with batch_idx & time
+            points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (1, 1)], constant_values=0)).float().cuda()
 
         start = time.time()
         # ----- forward
@@ -138,6 +138,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.make_trt == 1:
-        make_trt(args.half_precision==1)
+        make_trt()
     elif args.inference == 1:
-        inference(args.half_precision==1)
+        inference()
