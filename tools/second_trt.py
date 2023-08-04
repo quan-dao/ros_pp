@@ -5,6 +5,7 @@ import pickle
 from typing import List
 from easydict import EasyDict 
 import argparse
+import time
 
 from common_utils import create_logger
 
@@ -181,9 +182,9 @@ def generate_predicted_boxes(heads_hm: List[torch.Tensor],
         # axis-aligned NMS instead of BEV NMS for speed
         for batch_idx in range(batch_size):
             boxes, scores, labels = nms_axis_aligned(*this_head_pred[batch_idx], 
-                                                     post_proc_cfg.nms_iou_thresh, 
-                                                     post_proc_cfg.nms_pre_max_size, 
-                                                     post_proc_cfg.nms_post_max_size)
+                                                     post_proc_cfg.NMS_IOU_THRESH, 
+                                                     post_proc_cfg.NMS_PRE_MAXSIZE, 
+                                                     post_proc_cfg.NMS_POST_MAXSIZE)
             
             pred_boxes = torch.cat([boxes,  # (N, 7) - x, y, z, dx, dy, dz, yaw 
                                     scores.unsqueeze(1),  # (N, 1) 
@@ -263,15 +264,22 @@ def inference():
         points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
         print(f"poitns: {points.shape}")
 
-    # ----- forward
-    spatial_features = part3d(points)
-    heads_hm, heads_center, heads_center_z, heads_dim, heads_rot = part2d_trt(spatial_features)
-    batch_boxes = generate_predicted_boxes(heads_hm, heads_center, heads_center_z, heads_dim, heads_rot,
-                                           feature_map_stride=model_cfg.DENSE_HEAD.FEATURE_MAP_STRIDE,
-                                           voxel_size=data_cfg.VOXEL_SIZE,
-                                           point_cloud_range=data_cfg.POINT_CLOUD_RANGE,
-                                           post_proc_cfg=model_cfg.DENSE_HEAD.POST_PROCESSING, 
-                                           heads_cls_idx=heads_cls_idx)
+    for _ in range(5):
+        start = time.time()
+        # ----- forward
+        spatial_features = part3d(points)
+        heads_hm, heads_center, heads_center_z, heads_dim, heads_rot = part2d_trt(spatial_features)
+        batch_boxes = generate_predicted_boxes(heads_hm, heads_center, heads_center_z, heads_dim, heads_rot,
+                                            feature_map_stride=model_cfg.DENSE_HEAD.FEATURE_MAP_STRIDE,
+                                            voxel_size=data_cfg.VOXEL_SIZE,
+                                            point_cloud_range=data_cfg.POINT_CLOUD_RANGE,
+                                            post_proc_cfg=model_cfg.DENSE_HEAD.POST_PROCESSING, 
+                                            heads_cls_idx=heads_cls_idx)
+        end = time.time()
+        print('exec time: ', end - start)
+    
+    data_out = {'points': points, 'pred_boxes': batch_boxes}
+    torch.save(data_out, 'artifact/data_out_trt.pth')
 
 
 if __name__ == '__main__':
