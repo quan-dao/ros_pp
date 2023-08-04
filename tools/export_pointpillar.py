@@ -5,7 +5,7 @@ from ros_pp.models.backbones_3d import vfe
 from ros_pp.models import backbones_2d
 from ros_pp.models.backbones_2d import map_to_bev
 from ros_pp.models import dense_heads
-from .cfgs.nuscenes_models.cfg_cbgs_dyn_pp_centerpoint import data_cfg, model_cfg
+from cfgs.nuscenes_models.cbgs_dyn_pp_centerpoint import data_cfg, model_cfg
 from typing import Tuple
 
 

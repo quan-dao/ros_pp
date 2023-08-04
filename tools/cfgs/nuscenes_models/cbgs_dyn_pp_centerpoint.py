@@ -2,13 +2,14 @@ from easydict import EasyDict as edict
 
 
 BATCH_SIZE = 1
-
+POINT_FEATURES = ['x', 'y', 'z', 'intensity', 'timestamp']
 
 data_cfg = edict({
     'POINT_CLOUD_RANGE': [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0],
     'VOXEL_SIZE': [0.2, 0.2, 8.0],
     'CLASSES': ['car','truck', 'construction_vehicle', 'bus', 'trailer', 
-                'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+                'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'],
+    'NUM_POINT_FEATURES': len(POINT_FEATURES)
 })
 
 

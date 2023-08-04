@@ -5,7 +5,7 @@ import onnxruntime as ort
 import time
 from pathlib import Path
 
-from cfgs.nuscenes_models.cfg_cbgs_dyn_pp_centerpoint import data_cfg, model_cfg
+from cfgs.nuscenes_models.cbgs_dyn_pp_centerpoint import data_cfg, model_cfg
 from export_pointpillar import make_dummy_input, remove_points_outside_range, CenterPointPart0
 
 

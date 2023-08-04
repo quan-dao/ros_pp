@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 
-from .cfgs.nuscenes_models.cfg_cbgs_dyn_pp_centerpoint import data_cfg
+from .cfgs.nuscenes_models.cbgs_dyn_pp_centerpoint import data_cfg
 from .export_pointpillar import CenterPointPart0
 from mot.ab3dmot import track_1step
 from .visualization_tools import show_bird_eye_view

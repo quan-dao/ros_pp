@@ -57,15 +57,20 @@ def make_test_batch():
 
     nusc = NuScenes(dataroot='/home/user/dataset/nuscenes', verbose=True)
     scene = nusc.scene[0]
-    sample = nusc.get('sample', scene['first_sample_token'])
-    points = get_one_pointcloud(nusc, sample['data']['LIDAR_TOP'])
+    sample_tk = scene['first_sample_token']
+    for idx in range(10):
+        sample = nusc.get('sample', sample_tk)
+        points = get_one_pointcloud(nusc, sample['data']['LIDAR_TOP'])
 
-    painter = PointsPainter(points[:, :3])
-    painter.show()
+        # painter = PointsPainter(points[:, :3])
+        # painter.show()
 
-    data = {'points': points}
-    with open('./artifacts/one_nuscenes_point_cloud.pkl', 'wb') as f:
-        pickle.dump(data, f)
+        data = {'points': points}
+        with open(f'./artifacts/frame{idx}_nuscenes_point_cloud.pkl', 'wb') as f:
+            pickle.dump(data, f)
+
+        # move on
+        sample_tk = sample['next']
 
     print('data is saved to: artifacts/one_nuscenes_point_cloud.pkl')
 
@@ -95,15 +100,16 @@ def main():
 
 
 def viz_prediction():
-    data_out = torch.load('artifacts/data_out.pth', map_location=torch.device('cpu'))
-    for k, v in data_out.items():
-        print(f"{k} | {v.shape}")
+    for idx_frame in range(10):
+        data_out = torch.load(f'artifacts/data_out_trt_half0_frame{idx_frame}.pth', map_location=torch.device('cpu'))
+        for k, v in data_out.items():
+            print(f"{k} | {v.shape}")
 
-    points = data_out['points'].detach()
-    pred_boxes = data_out['pred_boxes'].detach()
+        points = data_out['points'].detach()
+        pred_boxes = data_out['pred_boxes'].detach()
 
-    painter = PointsPainter(points[:, :3], pred_boxes[:, :7])
-    painter.show()
+        painter = PointsPainter(points[:, :3], pred_boxes[:, :7])
+        painter.show()
 
 
 if __name__ == '__main__':
