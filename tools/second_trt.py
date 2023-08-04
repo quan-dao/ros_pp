@@ -204,13 +204,13 @@ def make_trt(half_precision: bool = False):
     from torch2trt import torch2trt
 
 
-    logger = create_logger('artifact/blah.txt')
+    logger = create_logger('artifacts/blah.txt')
     part3d = CenterPoint_Part3D()
     part3d.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth', logger=logger)
     part3d.eval()
     part3d.cuda()
 
-    with open('artifact/one_nuscenes_point_cloud.pkl', 'rb') as f:
+    with open('artifacts/one_nuscenes_point_cloud.pkl', 'rb') as f:
         data = pickle.load(f)
 
     # pad points with time
@@ -242,7 +242,7 @@ def inference(half_precision: bool = False):
     from torch2trt import TRTModule
 
 
-    logger = create_logger('artifact/blah.txt')
+    logger = create_logger('artifacts/blah.txt')
     part3d = CenterPoint_Part3D()
     part3d.load_params_from_file('./pretrained_models/cbgs_voxel01_centerpoint_nds_6454.pth', logger=logger)
     part3d.eval()
@@ -264,16 +264,12 @@ def inference(half_precision: bool = False):
         torch.tensor([8, 9]).long().cuda(),
     ]
 
+    for idx_frame in range(10):
+        with open(f'artifacts/frame{idx_frame}_nuscenes_point_cloud.pkl', 'rb') as f:
+            data = pickle.load(f)
+            # pad points with time
+            points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
 
-
-    # ----- dummy input
-    with open('artifact/one_nuscenes_point_cloud.pkl', 'rb') as f:
-        data = pickle.load(f)
-        # pad points with time
-        points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
-        print(f"poitns: {points.shape}")
-
-    for _ in range(30):
         start = time.time()
         # ----- forward
         spatial_features = part3d(points)
@@ -287,10 +283,10 @@ def inference(half_precision: bool = False):
                                             post_proc_cfg=model_cfg.DENSE_HEAD.POST_PROCESSING, 
                                             heads_cls_idx=heads_cls_idx)
         end = time.time()
-        print('exec time: ', end - start)
+        print(f'exec time frame {idx_frame}: ', end - start)
     
-    data_out = {'points': points, 'pred_boxes': batch_boxes}
-    torch.save(data_out, f'artifact/data_out_trt_half{int(half_precision)}.pth')
+        data_out = {'points': points, 'pred_boxes': batch_boxes}
+        torch.save(data_out, f'artifacts/data_out_trt_half{int(half_precision)}_frame{idx_frame}.pth')
 
 
 if __name__ == '__main__':
