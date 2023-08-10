@@ -101,11 +101,7 @@ def inference():
     # ------ inference param
     heads_cls_idx = [
         torch.tensor([0]).long().cuda(),
-        torch.tensor([1, 2]).long().cuda(),
-        torch.tensor([3, 4]).long().cuda(),
-        torch.tensor([5]).long().cuda(),
-        torch.tensor([6, 7]).long().cuda(),
-        torch.tensor([8, 9]).long().cuda(),
+        torch.tensor([1]).long().cuda(),
     ]
 
     for idx_frame in range(10):
