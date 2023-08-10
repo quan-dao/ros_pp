@@ -27,8 +27,8 @@ model_cfg = edict({
             'VOXEL_SIZE': data_cfg.VOXEL_SIZE,
             'POINT_CLOUD_RANGE': data_cfg.POINT_CLOUD_RANGE,
             'NUM_POINT_FEATURES': data_cfg.NUM_POINT_FEATURES,
-            'MAX_NUM_POINTS_PER_VOXEL': 20,
-            'MAX_NUM_VOXELS': 60000,
+            'MAX_NUM_POINTS_PER_VOXEL': 10,
+            'MAX_NUM_VOXELS': 30000,
         },
     
     'MAP_TO_BEV': 

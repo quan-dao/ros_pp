@@ -5,7 +5,7 @@ import argparse
 import time
 
 from ros_pp.models.detectors import Detector3DTemplate
-from cfgs.nuscenes_models.cbgs_dyn_pp_centerpoint import model_cfg, data_cfg
+from cfgs.nuscenes_models.cbgs_pseudo_dyn_pp_centerpoint import model_cfg, data_cfg
 from ros_pp.models.backbones_3d.vfe.dynamic_pillar_vfe import DynamicPillarVFE, PseudoDynamicPillarVFE
 from ros_pp.models.backbones_2d.map_to_bev.pointpillar_scatter import PointPillarScatter
 from ros_pp.models.backbones_2d.base_bev_backbone import BaseBEVBackbone
@@ -71,7 +71,7 @@ def make_trt():
     with open('artifacts/one_nuscenes_point_cloud.pkl', 'rb') as f:
         data = pickle.load(f)
         # pad points with batch_idx & time
-        points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (1, 1)], constant_values=0)).float().cuda()
+        points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
 
     part2d = PointPillar_Part2D()
     part2d.load_params_from_file(path_pretrained_weights, logger=logger)
@@ -112,7 +112,7 @@ def inference():
         with open(f'artifacts/frame{idx_frame}_nuscenes_point_cloud.pkl', 'rb') as f:
             data = pickle.load(f)
             # pad points with batch_idx & time
-            points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (1, 1)], constant_values=0)).float().cuda()
+            points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
 
         start = time.time()
         # ----- forward

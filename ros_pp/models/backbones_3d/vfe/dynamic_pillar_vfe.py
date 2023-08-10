@@ -62,10 +62,10 @@ class PFNLayerV2_(nn.Module):
         
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, inputs, unq_inv):
+    def forward(self, inputs):
 
         x = self.linear(inputs)
-        x = self.norm(x) if self.use_norm else x
+        x = self.norm(x.permute(0, 2, 1)).permute(0, 2, 1).contiguous() if self.use_norm else x
         x = self.relu(x)
         x_max = torch.max(x, dim=1, keepdim=True)[0]
 
