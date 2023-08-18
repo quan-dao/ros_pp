@@ -219,7 +219,7 @@ class PseudoDynamicPillarVFE(VFETemplate):
         paddings_indicator = actual_num.int() > max_num
         return paddings_indicator
     
-    def forward(self, points: np.ndarray):
+    def forward(self, voxel_features, coords, voxel_num_points):
         """
         Args:
             points: (N, 3 + C)
@@ -228,12 +228,6 @@ class PseudoDynamicPillarVFE(VFETemplate):
             voxel_features: (V, C)
             voxel_coords: (V, 3)
         """
-        voxel_features, _coords, voxel_num_points = self._voxel_generator(points)
-        # add batch_idx to voxel
-        coords = _coords.new_zeros(_coords.shape[0], 4)
-        coords[:, 1:] = _coords
-
-
         points_mean = voxel_features[:, :, :3].sum(dim=1, keepdim=True) / voxel_num_points.type_as(voxel_features).view(-1, 1, 1)
         f_cluster = voxel_features[:, :, :3] - points_mean
 

@@ -103,14 +103,14 @@ class CenterHead(nn.Module):
         self.nms_pre_max_size = model_cfg.POST_PROCESSING.NMS_PRE_MAXSIZE 
         self.nms_post_max_size = model_cfg.POST_PROCESSING.NMS_POST_MAXSIZE
 
-        self.heads_cls_idx = [
-            torch.tensor([0]).long().cuda(),
-            torch.tensor([1, 2]).long().cuda(),
-            torch.tensor([3, 4]).long().cuda(),
-            torch.tensor([5]).long().cuda(),
-            torch.tensor([6, 7]).long().cuda(),
-            torch.tensor([8, 9]).long().cuda(),
-        ]
+        # self.heads_cls_idx = [
+        #     torch.tensor([0]).long().cuda(),
+        #     torch.tensor([1, 2]).long().cuda(),
+        #     torch.tensor([3, 4]).long().cuda(),
+        #     torch.tensor([5]).long().cuda(),
+        #     torch.tensor([6, 7]).long().cuda(),
+        #     torch.tensor([8, 9]).long().cuda(),
+        # ]
     
     def forward(self, spatial_features_2d: torch.Tensor):
         """

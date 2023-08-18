@@ -4,6 +4,8 @@ import pickle
 import argparse
 import time
 
+from spconv.pytorch.utils import PointToVoxel
+
 from ros_pp.models.detectors import Detector3DTemplate
 from cfgs.nuscenes_models.cbgs_pseudo_dyn_pp_centerpoint import model_cfg, data_cfg
 from ros_pp.models.backbones_3d.vfe.dynamic_pillar_vfe import DynamicPillarVFE, PseudoDynamicPillarVFE
@@ -27,11 +29,13 @@ grid_size = np.floor((point_cloud_range[3:] - point_cloud_range[:3]) / voxel_siz
 class PointPillar_Part3D(Detector3DTemplate):
     def __init__(self):
         super().__init__()
+        self.patch_generator = PatchGenerator(model_cfg.PATCH_GENERATOR)
         self.vfe = PseudoDynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES, voxel_size, point_cloud_range)
         self.map_to_bev_module = PointPillarScatter(model_cfg.MAP_TO_BEV, grid_size)
 
     def forward(self, points: torch.Tensor):
-        voxel_coords, features = self.vfe(points)
+        voxel_features, coords, voxel_num_points = self.patch_generator(points)
+        voxel_coords, features = self.vfe(voxel_features, coords, voxel_num_points)
         spatial_features = self.map_to_bev_module(voxel_coords, features)
         return spatial_features
 
@@ -60,6 +64,7 @@ class PointPillar_Part2D(Detector3DTemplate):
         return pred_boxes
 
 
+@torch.no_grad()
 def make_trt():
     from torch2trt import torch2trt
 
@@ -87,6 +92,7 @@ def make_trt():
     print(f'artifacts/{trt_filename}')
 
 
+@torch.no_grad()
 def inference():
     from torch2trt import TRTModule
 
@@ -107,7 +113,7 @@ def inference():
     for idx_frame in range(10):
         with open(f'artifacts/frame{idx_frame}_nuscenes_point_cloud.pkl', 'rb') as f:
             data = pickle.load(f)
-            # pad points with batch_idx & time
+            # pad points with time
             points = torch.from_numpy(np.pad(data['points'], pad_width=[(0, 0), (0, 1)], constant_values=0)).float().cuda()
 
         start = time.time()
@@ -125,6 +131,102 @@ def inference():
     
         data_out = {'points': points, 'pred_boxes': batch_boxes}
         torch.save(data_out, f'artifacts/pillar_data_out_trt_frame{idx_frame}.pth')
+
+
+class PatchGenerator(torch.nn.Module):
+    def __init__(self, model_cfg):
+        super().__init__()
+        self._voxel_generator = PointToVoxel(
+            vsize_xyz=model_cfg.VOXEL_SIZE,
+            coors_range_xyz=model_cfg.POINT_CLOUD_RANGE,
+            num_point_features=model_cfg.NUM_POINT_FEATURES,
+            max_num_points_per_voxel=model_cfg.MAX_NUM_POINTS_PER_VOXEL,
+            max_num_voxels=model_cfg.MAX_NUM_VOXELS,
+            device=torch.device("cuda:0")
+        )
+        self.point_cloud_range = np.array(model_cfg.POINT_CLOUD_RANGE)
+        self.patch_stride = model_cfg.PATCH_STRIDE
+        self.patch_radius = model_cfg.PATCH_RADIUS
+        self.patch_num_min_points = model_cfg.PATCH_NUM_MIN_POINTS
+        self.max_num_patches = model_cfg.MAX_NUM_PATCHES
+        # ---- cache repetitive computation
+        grid_dxdy = np.floor((self.point_cloud_range[3: 5] - self.point_cloud_range[:2]) / self.patch_stride).astype(int)
+        xx, yy = np.meshgrid(np.arange(grid_dxdy[0]), np.arange(grid_dxdy[1]))
+        self.patch_center_grid_coord = np.stack([xx.reshape(-1), yy.reshape(-1)], axis=1)
+        self.patch_center_3d_coord = (self.patch_center_grid_coord.astype(float) + 0.5) * self.patch_stride + self.point_cloud_range[:2]  # (P, 2)
+        # to torch.Tensor
+        self.patch_center_3d_coord = torch.from_numpy(self.patch_center_3d_coord).float().cuda()
+        self.patch_ori = torch.atan2(self.patch_center_3d_coord[:, 1], self.patch_center_3d_coord[:, 0])
+        
+    def forward(self, points: torch.Tensor):
+        """
+        Args:
+            points: (N, 3+C) - x, y, z, C-channel
+        """
+        # ---- point-to-patch correspondance
+        
+        # remove points outside of range
+        mask_in_range = torch.logical_and(points[:, :3] > self.point_cloud_range[:3], points[:, :3] < self.point_cloud_range[3:] - 1e-3).all(dim=1)
+        points = points[mask_in_range]  # (N, 3 + C)
+
+        # find points in each patch
+        dist_points2patch = torch.norm(points[:, :2].unsqueeze(1) - patch_center_3d_coord.unsqueeze(0), dim=2)
+        mask_points_in_patch = dist_points2patch < self.patch_radius  # (N, P)
+        
+        # filter patches having small #points
+        mask_empty_patch = mask_points_in_patch.sum(dim=0) < self.patch_num_min_points  # (P,)
+        mask_valid_patch = torch.logical_not(mask_empty_patch)
+        
+        # apply mask
+        mask_points_in_patch = mask_points_in_patch[:, mask_valid_patch]  # (N, P)
+        patch_center_3d_coord = self.patch_center_3d_coord[mask_valid_patch]  # (P, 2)
+        patch_ori = self.patch_ori[mask_valid_patch]  # (P,)
+        # -----
+
+        if patch_center_3d_coord.shape[0] > self.max_num_patches:
+            dist_patch2lidar = torch.norm(patch_center_3d_coord, dim=1)
+            _, sorted_indices = torch.sort(dist_patch2lidar)
+            sorted_indices = sorted_indices[:self.max_num_patches]
+
+            mask_points_in_patch[:, sorted_indices]
+            patch_center_3d_coord = patch_center_3d_coord[sorted_indices]
+            patch_ori = patch_ori[sorted_indices]
+
+        # ---- main loop: map points to patch canonical coord & voxelize
+        all_voxel_feat, all_voxel_coord, all_num_points = list(), list(), list()
+        for idx_patch in range(patch_center_3d_coord.shape[0]):
+            # extract
+            points_in_patch = points[mask_points_in_patch[:, idx_patch]]  # (N, 3 + C)
+            
+            # map to canonical
+            # translate
+            points_in_patch[:, :2] -= patch_center_3d_coord[idx_patch, :2]
+            # rotate
+            cos, sin = torch.cos(patch_ori[idx_patch]), torch.sin(patch_ori[idx_patch])
+            rot = torch.stack([
+                cos,  -sin,
+                sin,  cos 
+            ], dim=1).reshape(2, 2)
+            points_in_patch[:, :2] = torch.matmul(points_in_patch[:, :2], rot)
+
+            # voxelize
+            voxel_features, _coords, voxel_num_points = self._voxel_generator(points)
+            # add batch_idx to voxel
+            voxel_coords = _coords.new_zeros(_coords.shape[0], 4)
+            voxel_coords[:, 0] = idx_patch
+            voxel_coords[:, 1:] = _coords
+
+            # store
+            all_voxel_feat.append(voxel_features)
+            all_voxel_coord.append(voxel_coords)
+            all_num_points.append(voxel_num_points)
+        # ---
+
+        all_voxel_feat = torch.cat(all_voxel_feat)
+        all_voxel_coord = torch.cat(all_voxel_coord)
+        all_num_points = torch.cat(all_num_points)
+
+        return all_voxel_feat, all_voxel_coord, all_num_points, patch_center_3d_coord, patch_ori
 
 
 if __name__ == '__main__':

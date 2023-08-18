@@ -1,7 +1,7 @@
 from easydict import EasyDict as edict
 
 
-BATCH_SIZE = 1
+BATCH_SIZE = 100
 POINT_FEATURES = ['x', 'y', 'z', 'intensity', 'timestamp']
 
 data_cfg = edict({
@@ -15,6 +15,19 @@ data_cfg = edict({
 model_cfg = edict({
     'NAME': 'CenterPoint',
     
+    'PATCH_GENERATOR':
+        {
+            'VOXEL_SIZE': data_cfg.VOXEL_SIZE,
+            'POINT_CLOUD_RANGE': data_cfg.POINT_CLOUD_RANGE,
+            'NUM_POINT_FEATURES': data_cfg.NUM_POINT_FEATURES,
+            'MAX_NUM_POINTS_PER_VOXEL': 8,
+            'MAX_NUM_VOXELS': 30000,
+            'PATCH_STRIDE': 6.4,
+            'PATCH_RADIUS': 9.6,
+            'PATCH_NUM_MIN_POINTS': 10,
+            'MAX_NUM_PATCHES': 100,
+        },
+
     'VFE': 
         {
             'NAME': 'PseudoDynamicPillarVFE',
@@ -23,11 +36,6 @@ model_cfg = edict({
             'USE_NORM': True,
             'NUM_FILTERS': [64,],
             'NUM_RAW_POINT_FEATURES': 5,
-            'VOXEL_SIZE': data_cfg.VOXEL_SIZE,
-            'POINT_CLOUD_RANGE': data_cfg.POINT_CLOUD_RANGE,
-            'NUM_POINT_FEATURES': data_cfg.NUM_POINT_FEATURES,
-            'MAX_NUM_POINTS_PER_VOXEL': 32,
-            'MAX_NUM_VOXELS': 30000,
         },
     
     'MAP_TO_BEV': 
