@@ -77,7 +77,7 @@ class BaseBEVBackbone(nn.Module):
             ))
 
         self.num_bev_features = c_in
-    
+
     def get_output_feature_dim(self):
         return self.num_bev_features
 
@@ -103,6 +103,5 @@ class BaseBEVBackbone(nn.Module):
 
         if len(self.deblocks) > len(self.blocks):
             x = self.deblocks[-1](x)
-
         return x  # a.k.a spatial_features_2d
-    
+
