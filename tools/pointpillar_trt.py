@@ -30,8 +30,8 @@ class PointPillar_Part3D(Detector3DTemplate):
     def __init__(self):
         super().__init__()
         self.patch_generator = PatchGenerator(model_cfg.PATCH_GENERATOR)
-        self.vfe = PseudoDynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES, voxel_size, point_cloud_range)
-        self.map_to_bev_module = PointPillarScatter(model_cfg.MAP_TO_BEV, grid_size)
+        self.vfe = PseudoDynamicPillarVFE(model_cfg.VFE, data_cfg.NUM_POINT_FEATURES, voxel_size, self.patch_generator.patch_point_cloud_range)
+        self.map_to_bev_module = PointPillarScatter(model_cfg.MAP_TO_BEV, [self.patch_generator.patch_grid_size, self.patch_generator.patch_grid_size, 1])
 
     def forward(self, points: torch.Tensor):
         voxel_features, coords, voxel_num_points = self.patch_generator(points)
@@ -136,19 +136,23 @@ def inference():
 class PatchGenerator(torch.nn.Module):
     def __init__(self, model_cfg):
         super().__init__()
+
+        self.point_cloud_range = np.array(model_cfg.POINT_CLOUD_RANGE)
+        self.patch_stride = model_cfg.PATCH_STRIDE
+        self.patch_radius = model_cfg.PATCH_RADIUS
+        self.patch_grid_size = np.floor(2.0 * model_cfg.PATCH_RADIUS / model_cfg.VOXEL_SIZE).astype(int).item()
+        self.patch_num_min_points = model_cfg.PATCH_NUM_MIN_POINTS
+        self.max_num_patches = model_cfg.MAX_NUM_PATCHES
+        self.patch_point_cloud_range = np.array([-model_cfg.PATCH_RADIUS, -model_cfg.PATCH_RADIUS, -5.0, model_cfg.PATCH_RADIUS, model_cfg.PATCH_RADIUS, 3.0])
+        
         self._voxel_generator = PointToVoxel(
             vsize_xyz=model_cfg.VOXEL_SIZE,
-            coors_range_xyz=model_cfg.POINT_CLOUD_RANGE,
+            coors_range_xyz=self.patch_point_cloud_range,
             num_point_features=model_cfg.NUM_POINT_FEATURES,
             max_num_points_per_voxel=model_cfg.MAX_NUM_POINTS_PER_VOXEL,
             max_num_voxels=model_cfg.MAX_NUM_VOXELS,
             device=torch.device("cuda:0")
         )
-        self.point_cloud_range = np.array(model_cfg.POINT_CLOUD_RANGE)
-        self.patch_stride = model_cfg.PATCH_STRIDE
-        self.patch_radius = model_cfg.PATCH_RADIUS
-        self.patch_num_min_points = model_cfg.PATCH_NUM_MIN_POINTS
-        self.max_num_patches = model_cfg.MAX_NUM_PATCHES
         # ---- cache repetitive computation
         grid_dxdy = np.floor((self.point_cloud_range[3: 5] - self.point_cloud_range[:2]) / self.patch_stride).astype(int)
         xx, yy = np.meshgrid(np.arange(grid_dxdy[0]), np.arange(grid_dxdy[1]))
