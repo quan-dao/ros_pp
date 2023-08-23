@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.init import kaiming_normal_
 from typing import List, Tuple
 
@@ -127,6 +128,10 @@ class CenterHead(nn.Module):
 
         for head_idx, head in enumerate(self.heads_list):
             hm, center, center_z, dim, rot = head(x)
+            hm = torch.sigmoid(hm)
+            hm_peak = F.max_pool2d(hm, kernel_size=3, stride=1, padding=1)
+            hm_peak_mask = torch.absolute(hm - hm_peak) < 1e-3
+            hm *= hm_peak_mask.float()
             # ---
             heads_hm.append(hm)
             heads_center.append(center)
