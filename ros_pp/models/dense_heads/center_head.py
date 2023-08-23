@@ -130,8 +130,8 @@ class CenterHead(nn.Module):
             hm, center, center_z, dim, rot = head(x)
             hm = torch.sigmoid(hm)
             hm_peak = F.max_pool2d(hm, kernel_size=3, stride=1, padding=1)
-            hm_peak_mask = torch.absolute(hm - hm_peak) < 1e-3
-            hm *= hm_peak_mask.float()
+            hm_not_peak_mask = torch.absolute(hm - hm_peak) > 1e-3
+            hm[hm_not_peak_mask] = 0.
             # ---
             heads_hm.append(hm)
             heads_center.append(center)
