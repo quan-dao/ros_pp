@@ -1,7 +1,7 @@
 from easydict import EasyDict as edict
 
 
-BATCH_SIZE = 2
+BATCH_SIZE = 20
 POINT_FEATURES = ['x', 'y', 'z', 'intensity', 'timestamp']
 
 data_cfg = edict({
@@ -14,7 +14,8 @@ data_cfg = edict({
 
 model_cfg = edict({
     'NAME': 'CenterPoint',
-    
+    'BATCH_SIZE': BATCH_SIZE,
+
     'PATCH_GENERATOR':
         {
             'VOXEL_SIZE': data_cfg.VOXEL_SIZE,
@@ -25,7 +26,7 @@ model_cfg = edict({
             'PATCH_STRIDE': 20.,
             'PATCH_RADIUS': 19.2,
             'PATCH_NUM_MIN_POINTS': 10,
-            'MAX_NUM_PATCHES': 2,
+            'MAX_NUM_PATCHES': BATCH_SIZE,
         },
 
     'VFE': 
