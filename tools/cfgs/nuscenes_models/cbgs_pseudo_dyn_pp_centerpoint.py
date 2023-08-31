@@ -1,7 +1,7 @@
 from easydict import EasyDict as edict
 
 
-BATCH_SIZE = 20
+BATCH_SIZE = 2
 POINT_FEATURES = ['x', 'y', 'z', 'intensity', 'timestamp']
 
 data_cfg = edict({

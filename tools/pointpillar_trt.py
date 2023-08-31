@@ -17,7 +17,7 @@ from common_utils import create_logger
 from second_trt import generate_predicted_boxes
 
 
-trt_filename = 'pointpillar_part2d_trt.pth'
+trt_filename = f'pointpillar_part2d_{data_cfg.BATCH_SIZE}patches_trt.pth'
 path_pretrained_weights = './pretrained_models/cbgs_pp_centerpoint_nds6070.pth'
 
 logger = create_logger('artifacts/blah.txt')
